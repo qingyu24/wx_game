@@ -14,6 +14,8 @@
 
 ## 开始游戏
 
+无需安装的交付版在 [playable/mist-lantern.html](playable/mist-lantern.html)。在 GitHub 文件页选择下载后，用浏览器打开即可。此文件包含全部美术与程序，约 10 MB；源码仍是唯一维护入口，可通过 `npm run build:offline` 重新生成。
+
 需要 Node.js 20.19+（推荐 22）。
 
 ```sh
