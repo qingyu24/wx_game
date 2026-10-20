@@ -1,6 +1,5 @@
 {
-  "name": "微信小游戏合集 (WeChat Mini-Games)",
-  "description": "沉浸式微信小游戏畅玩合集：精选经典《跳一跳》、《羊了个羊》、《合成大西瓜》，支持逼真微信胶囊控件、微信好友排行榜与朋友圈战绩分享。",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "name": "雾灯归途",
+  "description": "东方幻想叙事 RPG，八章主线、二十四张探索地图与三种结局。",
+  "requestFramePermissions": []
 }
