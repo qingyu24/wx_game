@@ -1,6 +1,6 @@
 # 发布与后续平台接入
 
-线上游戏：https://mist-lantern-qingyu24.zestychime6.chatgpt.site
+线上游戏：https://mist-lantern-qingyu24.yuqingmeng.chatgpt.site
 
 GitHub：https://github.com/qingyu24/wx_game
 

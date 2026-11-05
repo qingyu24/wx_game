@@ -1,6 +1,6 @@
 # 雾灯归途 · Mist Lantern
 
-在线游玩：[雾灯归途](https://mist-lantern-qingyu24.zestychime6.chatgpt.site)。
+在线游玩：[雾灯归途](https://mist-lantern-qingyu24.yuqingmeng.chatgpt.site)。
 
 从原来的微信休闲小游戏合集重构的中文单机探索 RPG。提灯人沈砚进入一座逐渐遗忘居民的山城，寻找姐姐沈栖，并决定记忆应该由谁保管。
 
