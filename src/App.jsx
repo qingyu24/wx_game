@@ -70,6 +70,7 @@ import {
 } from "./rpg/engine.mjs";
 import "./index.css";
 import Expedition from "./rpg/Expedition.jsx";
+import ActionWorld from "./rpg/ActionWorld.jsx";
 import { enterExpedition } from "./rpg/expeditions.mjs";
 import { createExpeditionBattle, bossMechanics } from "./rpg/engine.mjs";
 const artStyle = (ch) => ({
@@ -181,6 +182,7 @@ export default function App() {
     () => readSave(localStorage) || freshState(),
   );
   const [screen, setScreen] = useState("title");
+  const [worldMode, setWorldMode] = useState(true);
   const [modal, setModal] = useState(null),
     [tab, setTab] = useState("quests");
   const [dialog, setDialog] = useState(null),
@@ -345,7 +347,7 @@ export default function App() {
         ArrowRight: [3, 0],
         d: [3, 0],
       }[e.key];
-      if (v) {
+      if (v && !worldMode) {
         e.preventDefault();
         setState((s) => ({
           ...s,
@@ -355,7 +357,7 @@ export default function App() {
           },
         }));
       }
-      if (e.key.toLowerCase() === "e") {
+      if (e.key.toLowerCase() === "e" && !worldMode) {
         e.preventDefault();
         const s = stateRef.current;
         const nearest = [...chapters[s.chapter].nodes].sort(
@@ -365,13 +367,13 @@ export default function App() {
         )[0];
         openNode(nearest);
       }
-      if (e.key.toLowerCase() === "j") setModal("journal");
+      if (e.key.toLowerCase() === "j" && !worldMode) setModal("journal");
       if (e.key.toLowerCase() === "m") setModal("map");
       if (e.key.toLowerCase() === "i") setModal("inventory");
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [screen]);
+  }, [screen, worldMode]);
   useEffect(() => {
     if (!modal && !battle && !dialog) return;
     const handle = (e) => {
@@ -431,11 +433,7 @@ export default function App() {
     setScreen("game");
     setModal(null);
     setPending(null);
-    setDialog({
-      type: "intro",
-      title: "序章 · 一盏未寄出的灯",
-      lines: chapters[0].intro,
-    });
+    setDialog(null);
     setLine(0);
     setPhase("lines");
   }
@@ -657,7 +655,7 @@ export default function App() {
           <div className="title-shade" />
           <div className="title-top">
             <span>
-              <i /> 独立叙事角色扮演
+              <i /> 探索 · 战斗 · 角色扮演
             </span>
             <Action
               className="icon-button"
@@ -688,7 +686,7 @@ export default function App() {
             <p className="title-description">
               提一盏旧灯，走进被遗忘的山城。
               <br />
-              寻找一个人，也找回那些没有说完的话。
+              穿过村落与遗迹，在雾中挥刀、闪避、点灯。
             </p>
             <div className="title-actions">
               <Action
@@ -778,95 +776,116 @@ export default function App() {
                 className={`scene ${transition ? "traveling" : ""}`}
                 aria-label={`${ch.location}探索场景`}
               >
-                <div className="scene-art" style={artStyle(ch.id)} />
-                <div className="scene-vignette" />
-                <div className={`weather weather-${ch.id}`} aria-hidden="true">
-                  {Array.from({ length: 15 }, (_, i) => (
-                    <i key={i} style={{ "--i": i }} />
-                  ))}
-                </div>
-                <div className="scene-heading">
-                  <span className="eyebrow">{ch.numeral} / 山海行旅</span>
-                  <h1>{ch.location}</h1>
-                  <p>{ch.weather}</p>
-                </div>
-                <div className="compass-rose" aria-hidden="true">
-                  <span>北</span>
-                  <Navigation size={26} />
-                  <small>
-                    西 <i /> 东
-                  </small>
-                  <span>南</span>
-                </div>
-                <div className="scene-path" aria-hidden="true">
-                  <svg viewBox="0 0 1000 650" preserveAspectRatio="none">
-                    <path d="M170 450 Q340 590 420 490 T590 390 Q650 290 740 220 T890 320" />
-                  </svg>
-                </div>
-                <div className="hotspots" aria-label="场景交互点">
-                  {ch.nodes.map((n) => {
-                    const completed = done(state, ch.id, n.id),
-                      locked = requirements(state, ch.id, n).length > 0;
-                    return (
-                      <button
-                        key={n.id}
-                        className={`hotspot ${completed ? "completed" : ""} ${locked ? "locked" : ""} ${n.kind === "boss" ? "boss-node" : ""} ${nextTask?.id === n.id ? "suggested" : ""}`}
-                        style={{ left: `${n.x}%`, top: `${n.y}%` }}
-                        onClick={() => openNode(n)}
-                        disabled={isBusy || transition}
-                        aria-label={`${n.name}，${kindLabel[n.kind]}${completed ? "，已完成" : locked ? "，需前置线索" : ""}`}
-                      >
-                        <span className="hotspot-icon">
-                          {completed ? (
-                            <Check size={14} />
-                          ) : locked ? (
-                            <Lock size={13} />
-                          ) : (
-                            <KindIcon kind={n.kind} size={16} />
-                          )}
-                        </span>
-                        <span className="hotspot-label">
-                          {n.name}
-                          <small>
-                            {completed ? "已完成" : kindLabel[n.kind]}
-                          </small>
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-                <div
-                  className="traveler"
-                  style={{
-                    left: `${state.position.x}%`,
-                    top: `${state.position.y}%`,
-                  }}
-                  aria-label="沈砚的位置"
+                {worldMode && (
+                  <ActionWorld
+                    state={state}
+                    onChange={setState}
+                    onNode={openNode}
+                    busy={isBusy || transition || screen !== "game"}
+                    reducedMotion={settings.reducedMotion}
+                  />
+                )}
+                <button
+                  className="world-mode-switch"
+                  disabled={isBusy}
+                  onClick={() => setWorldMode((v) => !v)}
                 >
-                  <span className="traveler-shadow" />
-                  <img src="/art/traveler.webp" alt="" />
-                  <i className="lamp-glow" />
-                </div>
-                <div className="scene-bottom">
-                  <span>
-                    <MapPin size={13} /> 点击地点探索
-                  </span>
-                  <span className="desktop-hint">
-                    <kbd>W A S D</kbd> 移动 <kbd>E</kbd> 交互
-                  </span>
-                  <button
-                    className="mobile-rest"
-                    onClick={() => {
-                      setState((s) => rest(s));
-                      notify("营火休整完毕，生命与灵力已恢复。");
-                    }}
-                    disabled={isBusy}
+                  {worldMode ? "剧情地图" : "实景探索"}
+                </button>
+                <div className={`legacy-scene ${worldMode ? "hidden" : ""}`}>
+                  <div className="scene-art" style={artStyle(ch.id)} />
+                  <div className="scene-vignette" />
+                  <div
+                    className={`weather weather-${ch.id}`}
+                    aria-hidden="true"
                   >
-                    <Flame size={14} /> 营火休整
-                  </button>
-                  <button onClick={() => showModal("map")} disabled={isBusy}>
-                    <Compass size={14} /> 查看舆图
-                  </button>
+                    {Array.from({ length: 15 }, (_, i) => (
+                      <i key={i} style={{ "--i": i }} />
+                    ))}
+                  </div>
+                  <div className="scene-heading">
+                    <span className="eyebrow">{ch.numeral} / 山海行旅</span>
+                    <h1>{ch.location}</h1>
+                    <p>{ch.weather}</p>
+                  </div>
+                  <div className="compass-rose" aria-hidden="true">
+                    <span>北</span>
+                    <Navigation size={26} />
+                    <small>
+                      西 <i /> 东
+                    </small>
+                    <span>南</span>
+                  </div>
+                  <div className="scene-path" aria-hidden="true">
+                    <svg viewBox="0 0 1000 650" preserveAspectRatio="none">
+                      <path d="M170 450 Q340 590 420 490 T590 390 Q650 290 740 220 T890 320" />
+                    </svg>
+                  </div>
+                  <div className="hotspots" aria-label="场景交互点">
+                    {ch.nodes.map((n) => {
+                      const completed = done(state, ch.id, n.id),
+                        locked = requirements(state, ch.id, n).length > 0;
+                      return (
+                        <button
+                          key={n.id}
+                          className={`hotspot ${completed ? "completed" : ""} ${locked ? "locked" : ""} ${n.kind === "boss" ? "boss-node" : ""} ${nextTask?.id === n.id ? "suggested" : ""}`}
+                          style={{ left: `${n.x}%`, top: `${n.y}%` }}
+                          onClick={() => openNode(n)}
+                          disabled={isBusy || transition}
+                          aria-label={`${n.name}，${kindLabel[n.kind]}${completed ? "，已完成" : locked ? "，需前置线索" : ""}`}
+                        >
+                          <span className="hotspot-icon">
+                            {completed ? (
+                              <Check size={14} />
+                            ) : locked ? (
+                              <Lock size={13} />
+                            ) : (
+                              <KindIcon kind={n.kind} size={16} />
+                            )}
+                          </span>
+                          <span className="hotspot-label">
+                            {n.name}
+                            <small>
+                              {completed ? "已完成" : kindLabel[n.kind]}
+                            </small>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div
+                    className="traveler"
+                    style={{
+                      left: `${state.position.x}%`,
+                      top: `${state.position.y}%`,
+                    }}
+                    aria-label="沈砚的位置"
+                  >
+                    <span className="traveler-shadow" />
+                    <img src="/art/traveler.webp" alt="" />
+                    <i className="lamp-glow" />
+                  </div>
+                  <div className="scene-bottom">
+                    <span>
+                      <MapPin size={13} /> 点击地点探索
+                    </span>
+                    <span className="desktop-hint">
+                      <kbd>W A S D</kbd> 移动 <kbd>E</kbd> 交互
+                    </span>
+                    <button
+                      className="mobile-rest"
+                      onClick={() => {
+                        setState((s) => rest(s));
+                        notify("营火休整完毕，生命与灵力已恢复。");
+                      }}
+                      disabled={isBusy}
+                    >
+                      <Flame size={14} /> 营火休整
+                    </button>
+                    <button onClick={() => showModal("map")} disabled={isBusy}>
+                      <Compass size={14} /> 查看舆图
+                    </button>
+                  </div>
                 </div>
                 {battle && (
                   <div

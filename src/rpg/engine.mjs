@@ -19,6 +19,7 @@ export const freshState = () => ({
   mp: 6,
   seconds: 0,
   routes: [],
+  wilds: [],
   expedition: null,
   ending: null,
   started: false,
@@ -488,6 +489,20 @@ export function validateSave(input) {
     (!done(s, 7, "boss") || (s.ending === "dawn" && !eligibleDawn(s)))
   )
     error();
+  if (
+    input.wilds !== undefined &&
+    (!Array.isArray(input.wilds) ||
+      input.wilds.length > 64 ||
+      new Set(input.wilds).size !== input.wilds.length ||
+      input.wilds.some(
+        (id) =>
+          typeof id !== "string" ||
+          !/^[0-7]:(enemy[0-4]|chest[0-2])$/.test(id) ||
+          Number(id[0]) > s.unlocked,
+      ))
+  )
+    error();
+  s.wilds = [...(input.wilds || [])];
   s.started = Boolean(input.started);
   const p = input.position;
   s.position =
