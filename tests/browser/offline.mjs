@@ -35,8 +35,8 @@ try {
   await p.goto(`http://127.0.0.1:${server.address().port}/`);
   await ctx.setOffline(true);
   await p.getByRole("button", { name: "点灯启程" }).click();
-  await p.getByRole("button", { name: "继续", exact: true }).click();
-  await p.getByRole("button", { name: "收起" }).click();
+  await p.locator(".action-world canvas").waitFor();
+  await p.getByRole("button", { name: "剧情地图", exact: true }).click();
   await p
     .getByRole("button", { name: "许婆婆的门灯，交谈", exact: true })
     .click();
@@ -47,7 +47,7 @@ try {
   await mkdir("work", { recursive: true });
   await p.screenshot({ path: "work/qa-offline.png" });
   const bg = await p
-    .locator(".scene>.scene-art")
+    .locator(".legacy-scene>.scene-art")
     .evaluate((e) => getComputedStyle(e).backgroundImage);
   const portrait = await p
     .locator(".player-bar>.portrait")

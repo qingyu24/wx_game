@@ -1,3 +1,4 @@
+import { blocked } from "./wilds.mjs";
 import { chapters, endings, VERSION } from "./content.mjs";
 import { routeDefinition, validateExpedition } from "./expeditions.mjs";
 export const SAVE_KEY = "mist-lantern-save-v1";
@@ -19,6 +20,8 @@ export const freshState = () => ({
   mp: 6,
   seconds: 0,
   routes: [],
+  wilds: [],
+  wildPosition: null,
   expedition: null,
   ending: null,
   started: false,
@@ -488,6 +491,44 @@ export function validateSave(input) {
     (!done(s, 7, "boss") || (s.ending === "dawn" && !eligibleDawn(s)))
   )
     error();
+  if (
+    input.wilds !== undefined &&
+    (!Array.isArray(input.wilds) ||
+      input.wilds.length > 72 ||
+      new Set(input.wilds).size !== input.wilds.length ||
+      input.wilds.some(
+        (id) =>
+          typeof id !== "string" ||
+          !/^[0-7]:(enemy[0-4]|chest[0-2]|bounty)$/.test(id) ||
+          Number(id[0]) > s.unlocked,
+      ))
+  )
+    error();
+  s.wilds = [...(input.wilds || [])];
+  for (const id of s.wilds.filter((id) => id.endsWith(":bounty"))) {
+    const chapter = Number(id[0]);
+    if (
+      !Array.from({ length: 5 }, (_, i) => `${chapter}:enemy${i}`)
+        .concat(Array.from({ length: 3 }, (_, i) => `${chapter}:chest${i}`))
+        .every((key) => s.wilds.includes(key))
+    )
+      error();
+  }
+
+  const wp = input.wildPosition;
+  if (wp != null) {
+    if (
+      !Number.isInteger(wp.chapter) ||
+      wp.chapter < 0 ||
+      wp.chapter > s.unlocked ||
+      !Number.isFinite(wp.x) ||
+      !Number.isFinite(wp.y) ||
+      blocked(wp.x, wp.y)
+    )
+      error();
+    s.wildPosition = { chapter: wp.chapter, x: wp.x, y: wp.y };
+  }
+
   s.started = Boolean(input.started);
   const p = input.position;
   s.position =

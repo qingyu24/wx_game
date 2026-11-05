@@ -84,6 +84,7 @@ await run(
     await p.goto(baseURL);
     await p.screenshot({ path: "work/qa-title.png" });
     await p.getByRole("button", { name: "点灯启程" }).click();
+    await p.getByRole("button", { name: "剧情地图", exact: true }).click();
     await dialog(p);
     await p
       .getByRole("button", { name: "许婆婆的门灯，交谈", exact: true })
@@ -111,6 +112,10 @@ await run(
     await p.screenshot({ path: "work/qa-scene.png" });
     await p.reload();
     await p.getByRole("button", { name: "继续旅途" }).click();
+    if (
+      await p.getByRole("button", { name: "剧情地图", exact: true }).isVisible()
+    )
+      await p.getByRole("button", { name: "剧情地图", exact: true }).click();
     assert.ok(
       await p
         .getByRole("button", { name: "桥头灯台，机关，已完成", exact: true })
@@ -139,6 +144,10 @@ await run(
     await seed(p, s);
     await p.goto(baseURL);
     await p.getByRole("button", { name: "继续旅途" }).click();
+    if (
+      await p.getByRole("button", { name: "剧情地图", exact: true }).isVisible()
+    )
+      await p.getByRole("button", { name: "剧情地图", exact: true }).click();
     await p
       .getByRole("button", { name: "青溪旧路，旧路探索", exact: true })
       .click();
@@ -152,6 +161,10 @@ await run(
     assert.equal(stored.expedition.x, 2);
     await p.reload();
     await p.getByRole("button", { name: "继续旅途" }).click();
+    if (
+      await p.getByRole("button", { name: "剧情地图", exact: true }).isVisible()
+    )
+      await p.getByRole("button", { name: "剧情地图", exact: true }).click();
     await p
       .getByRole("button", { name: "青溪旧路，旧路探索", exact: true })
       .click();
@@ -165,6 +178,10 @@ await run(
     await seed(p, { ...freshState(), started: true });
     await p.goto(baseURL);
     await p.getByRole("button", { name: "继续旅途" }).click();
+    if (
+      await p.getByRole("button", { name: "剧情地图", exact: true }).isVisible()
+    )
+      await p.getByRole("button", { name: "剧情地图", exact: true }).click();
     await p
       .getByRole("button", { name: "青石山径，遭遇", exact: true })
       .click();
@@ -185,6 +202,10 @@ await run(
       await p.getByRole("heading", { name: "守住了这盏灯" }).isVisible(),
     );
     await p.getByRole("button", { name: "继续旅途" }).click();
+    if (
+      await p.getByRole("button", { name: "剧情地图", exact: true }).isVisible()
+    )
+      await p.getByRole("button", { name: "剧情地图", exact: true }).click();
     assert.ok(
       await p
         .getByRole("button", { name: "青石山径，遭遇，已完成", exact: true })
@@ -198,6 +219,7 @@ await run(
     await p.setViewportSize({ width: 390, height: 844 });
     await p.goto(baseURL);
     await p.getByRole("button", { name: "点灯启程" }).click();
+    await p.getByRole("button", { name: "剧情地图", exact: true }).click();
     await dialog(p);
     assert.ok(
       await p.evaluate(
@@ -234,6 +256,10 @@ await run(
     await p.setViewportSize({ width: 390, height: 844 });
     await p.goto(baseURL);
     await p.getByRole("button", { name: "继续旅途" }).click();
+    if (
+      await p.getByRole("button", { name: "剧情地图", exact: true }).isVisible()
+    )
+      await p.getByRole("button", { name: "剧情地图", exact: true }).click();
     await p.getByRole("button", { name: "前往 雾泊渡" }).click();
     await p.getByRole("dialog").waitFor();
     await dialog(p);
@@ -247,6 +273,10 @@ await run(
     );
     await p.reload();
     await p.getByRole("button", { name: "继续旅途" }).click();
+    if (
+      await p.getByRole("button", { name: "剧情地图", exact: true }).isVisible()
+    )
+      await p.getByRole("button", { name: "剧情地图", exact: true }).click();
     await p.getByRole("button", { name: "决定天亮以后的事" }).click();
     await p.getByRole("button", { name: /^破晓/ }).click();
     assert.ok(

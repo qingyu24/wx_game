@@ -1,10 +1,15 @@
 name: RPG checks
 on:
   push:
+    branches: [main]
   pull_request:
+concurrency:
+  group: rpg-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -14,7 +19,15 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build:offline
-      - run: npx playwright install --with-deps chromium
+      - name: Select browser for UI checks
+        run: |
+          browser_path="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
+          if [ -n "$browser_path" ]; then
+            echo "CHROMIUM_PATH=$browser_path" >> "$GITHUB_ENV"
+            "$browser_path" --version
+          else
+            npx playwright install --with-deps chromium
+          fi
       - run: npm run test:browser
       - run: npm run test:offline
       - uses: actions/upload-artifact@v4

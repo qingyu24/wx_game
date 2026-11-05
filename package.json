@@ -9,10 +9,11 @@
     "preview": "vite preview --host 0.0.0.0",
     "test": "node --test tests/*.test.mjs",
     "lint": "tsc --noEmit",
-    "test:browser": "node tests/browser/smoke.mjs",
+    "test:browser": "node tests/browser/smoke.mjs && node tests/browser/action.mjs",
     "build:offline": "npm run build && node scripts/offline.mjs",
     "format": "prettier --write src scripts tests docs README.md",
-    "test:offline": "node tests/browser/offline.mjs"
+    "test:offline": "node tests/browser/offline.mjs",
+    "test:action": "node tests/browser/action.mjs"
   },
   "dependencies": {
     "lucide-react": "0.468.0",
