@@ -71,6 +71,8 @@ import {
 import "./index.css";
 import Expedition from "./rpg/Expedition.jsx";
 import ActionWorld from "./rpg/ActionWorld.jsx";
+import { createPlatformStorage } from "./rpg/storage.mjs";
+const localStorage = createPlatformStorage();
 import { enterExpedition } from "./rpg/expeditions.mjs";
 import { createExpeditionBattle, bossMechanics } from "./rpg/engine.mjs";
 const artStyle = (ch) => ({
@@ -770,7 +772,7 @@ export default function App() {
               ))}
             </nav>
           </header>
-          <div className="game-layout">
+          <div className={`game-layout ${worldMode ? "is-roaming" : ""}`}>
             <main className="adventure">
               <section
                 className={`scene ${transition ? "traveling" : ""}`}
@@ -1116,6 +1118,14 @@ export default function App() {
                                 ? "回看记忆 · 不重复领取奖励"
                                 : "灯火会记得你的选择"}
                             </span>
+                            {line < dialog.lines.length - 1 && (
+                              <button
+                                className="text-button dialog-skip"
+                                onClick={finishDialog}
+                              >
+                                略过对白
+                              </button>
+                            )}
                             <button
                               ref={focusRef}
                               className="dialog-next"
@@ -1420,7 +1430,8 @@ export default function App() {
               / 8 <i /> 选择 {Object.keys(state.choices).length} / 8
             </span>
             <span className="desktop-hint">
-              <kbd>J</kbd> 旅记 <kbd>M</kbd> 舆图 <kbd>I</kbd> 行囊
+              <kbd>J</kbd> {worldMode ? "挥刀" : "旅记"} <kbd>M</kbd> 舆图{" "}
+              <kbd>I</kbd> 行囊
             </span>
           </footer>
         </>
@@ -1917,8 +1928,8 @@ export default function App() {
                     旧路探索：每章三张地图，逐格移动揭开迷雾。踏动符灯会同时改变相邻两盏；按出口灯谱调好三灯并找到铜钥即可通行。
                   </p>
                   <p>
-                    键盘：方向键 / WASD 移动，E 交互，J 旅记，M 舆图，I
-                    行囊；Tab 切换按钮，Enter 确认。
+                    实景探索：方向键 / WASD 移动，J 挥刀，K 灯术，空格闪避，E
+                    交互，H 药草，M 舆图，I 行囊；Tab 切换按钮，Enter 确认。
                   </p>
                 </div>
                 <div className="settings-bottom">

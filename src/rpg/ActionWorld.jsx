@@ -11,6 +11,9 @@ import {
   claimWildReward,
   hitEnemies,
   findPath,
+  wildProgress,
+  attackProfile,
+  enemyProfile,
 } from "./wilds.mjs";
 import "./action-world.css";
 const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -29,6 +32,7 @@ export default function ActionWorld({
     live = useRef(),
     input = useRef(new Set()),
     controls = useRef(),
+    [guide, setGuide] = useState(false),
     [hud, setHud] = useState({
       hp: state.hp,
       mp: state.mp,
@@ -38,16 +42,28 @@ export default function ActionWorld({
       cooldown: 0,
     });
   const props = useRef();
-  props.current = { state, onChange, onNode, busy, reducedMotion };
+  props.current = {
+    state,
+    onChange,
+    onNode,
+    busy: busy || guide,
+    reducedMotion,
+  };
   useEffect(() => {
     const chapter = state.chapter;
     const world = {
-      p: { ...camp },
+      p:
+        state.wildPosition?.chapter === chapter
+          ? { x: state.wildPosition.x, y: state.wildPosition.y }
+          : { ...camp },
       face: { x: 1, y: 0 },
       enemies: spawns.map((p, i) => ({
         ...p,
         id: `${chapter}:enemy${i}`,
-        hp: state.wilds?.includes(`${chapter}:enemy${i}`) ? 0 : 100,
+        ...enemyProfile(i, chapter),
+        hp: state.wilds?.includes(`${chapter}:enemy${i}`)
+          ? 0
+          : enemyProfile(i, chapter).maxHp,
         wind: 0,
         wait: 0,
         flash: 0,
@@ -61,6 +77,13 @@ export default function ActionWorld({
       cd: 0,
       attackCd: 0,
       time: 0,
+      combo: 0,
+      comboTime: 0,
+      savedAt: 0,
+      savedPoint: { ...camp },
+      effects: [],
+      hurt: 0,
+      tracked: null,
       message: "沿石径探索 · 靠近人物按 E 交谈",
       target: null,
       near: null,
@@ -77,16 +100,65 @@ export default function ActionWorld({
         ...s,
         hp: Math.max(1, Math.round(world.hp)),
         mp: world.mp,
+        wildPosition: { chapter, x: world.p.x, y: world.p.y },
       }));
     const message = (t) => {
       world.message = t;
     };
+    function strike(magic, power) {
+      const before = world.enemies;
+      world.enemies = hitEnemies(before, world.p, world.face, magic, power);
+      let connected = false;
+      world.enemies.forEach((e, i) => {
+        const damage = before[i].hp - e.hp;
+        if (damage > 0) {
+          connected = true;
+          world.effects.push({
+            x: e.x,
+            y: e.y - 45,
+            text: `-${damage}`,
+            life: 0.75,
+            color: magic ? "#a6e7dc" : "#ffe2a0",
+          });
+          if (!magic && world.combo === 3) {
+            e.wind = 0;
+            e.wait = 0.8;
+          }
+        }
+      });
+      if (connected && !magic) {
+        world.mp = Math.min(6, world.mp + 1);
+        persist();
+      }
+    }
+    function navigate(target) {
+      world.route = findPath(world.p, target);
+      world.target = world.route.shift() || null;
+      world.tracked = target;
+      if (world.target)
+        message(`前往 ${target.name || "标记处"} · 可随时移动取消`);
+    }
     function action(kind) {
       if (props.current.busy || hidden) return;
       if (kind === "attack" && world.attackCd <= 0) {
+        const target = world.enemies
+          .filter((e) => e.hp > 0 && distance(e, world.p) < 140)
+          .sort((a, b) => distance(a, world.p) - distance(b, world.p))[0];
+        if (target) {
+          const d = distance(target, world.p) || 1;
+          world.face = {
+            x: (target.x - world.p.x) / d,
+            y: (target.y - world.p.y) / d,
+          };
+        }
+        world.combo = world.comboTime > 0 ? (world.combo % 3) + 1 : 1;
+        world.comboTime = 1;
         world.slash = 0.24;
-        world.attackCd = 0.36;
-        world.enemies = hitEnemies(world.enemies, world.p, world.face);
+        world.attackCd = world.combo === 3 ? 0.5 : 0.3;
+        strike(
+          false,
+          attackProfile(world.combo, props.current.state.gear.blade),
+        );
       }
       if (kind === "magic" && world.cd <= 0) {
         if (world.mp < 2) {
@@ -96,7 +168,9 @@ export default function ActionWorld({
         world.mp -= 2;
         world.magic = 0.6;
         world.cd = 3;
-        world.enemies = hitEnemies(world.enemies, world.p, world.face, true);
+        strike(true, {
+          damage: 65 + (props.current.state.gear.lantern - 1) * 10,
+        });
         persist();
       }
       if (kind === "dash" && world.dash <= 0 && world.inv <= 0) {
@@ -109,7 +183,13 @@ export default function ActionWorld({
           world.hp = stats(props.current.state).maxHp;
           world.mp = 6;
           persist();
-          message("营火休整 · 生命与灵力已恢复");
+          const progress = wildProgress(props.current.state);
+          if (progress.ready && !progress.claimed) {
+            props.current.onChange((s) =>
+              claimWildReward(s, `${chapter}:bounty`),
+            );
+            message("清雾委托完成 · +100铜钱 · +60阅历 · +1灯油");
+          } else message("营火休整 · 生命与灵力已恢复");
         } else if (n.kind === "chest") {
           props.current.onChange((s) => claimWildReward(s, n.id));
           message("获得 24 铜钱 · 10 阅历 · 1 药草");
@@ -118,7 +198,7 @@ export default function ActionWorld({
           props.current.onNode(n);
         }
       }
-      if (kind === "heal") {
+      if (kind === "heal" && world.hp < stats(props.current.state).maxHp) {
         if (props.current.state.herbs <= 0) {
           message("药草用尽，回营火休整");
           return;
@@ -132,7 +212,33 @@ export default function ActionWorld({
         message("使用药草 · 恢复 55 生命");
       }
     }
-    controls.current = action;
+    controls.current = (kind) => {
+      if (props.current.busy || hidden) return;
+      const s = props.current.state;
+      if (kind === "track") {
+        const chest = caches
+          .map((p, i) => ({
+            ...p,
+            name: "未开启的木箱",
+            id: `${chapter}:chest${i}`,
+          }))
+          .filter((p) => !s.wilds?.includes(p.id))
+          .sort((a, b) => distance(a, world.p) - distance(b, world.p))[0];
+        const enemy = world.enemies
+          .filter((e) => e.hp > 0)
+          .sort((a, b) => distance(a, world.p) - distance(b, world.p))[0];
+        navigate(chest || enemy || { ...camp, name: "营火 · 交付委托" });
+      } else if (kind === "camp") navigate({ ...camp, name: "营火" });
+      else if (kind === "story") {
+        const n = chapters[chapter].nodes.find(
+          (n) =>
+            n.kind !== "side" &&
+            !done(s, chapter, n.id) &&
+            !requirements(s, chapter, n).length,
+        );
+        if (n) navigate({ ...nodePoint(n), name: n.name });
+      } else action(kind);
+    };
     const key = (e) => {
       if (props.current.busy || e.target.closest("input,select,textarea"))
         return;
@@ -293,9 +399,24 @@ export default function ActionWorld({
       const w = world;
       w.time += paused || hidden ? 0 : dt;
       if (!paused && !hidden) {
-        for (const k of ["slash", "magic", "dash", "inv", "cd", "attackCd"])
+        for (const k of [
+          "slash",
+          "magic",
+          "dash",
+          "inv",
+          "cd",
+          "attackCd",
+          "comboTime",
+          "hurt",
+        ])
           w[k] = Math.max(0, w[k] - dt);
+        w.effects = w.effects.filter((e) => {
+          e.life -= dt;
+          e.y -= dt * 28;
+          return e.life > 0;
+        });
         const keys = input.current;
+        if (keys.has("j") || keys.has("attack")) action("attack");
         let dx =
             (keys.has("d") || keys.has("arrowright") ? 1 : 0) -
             (keys.has("a") || keys.has("arrowleft") ? 1 : 0),
@@ -320,6 +441,12 @@ export default function ActionWorld({
             w.walk = true;
           }
         }
+        if (w.dash > 0) {
+          dx = w.face.x;
+          dy = w.face.y;
+          w.target = null;
+          w.route = [];
+        }
         const speed = w.dash > 0 ? 630 : 185;
         w.p = moveHero(w.p, dx * dt * speed, dy * dt * speed);
         w.enemies.forEach((e) => {
@@ -337,20 +464,28 @@ export default function ActionWorld({
           if (e.wind > 0) {
             e.wind -= dt;
             if (e.wind <= 0) {
-              e.wait = 1.3;
-              if (d < 78 && w.inv <= 0) {
-                w.hp = Math.max(0, w.hp - 15);
+              e.wait = e.recovery;
+              if (d < e.radius && w.inv <= 0) {
+                w.hp = Math.max(0, w.hp - e.damage);
                 w.inv = 0.6;
+                w.hurt = 0.2;
+                w.effects.push({
+                  x: w.p.x,
+                  y: w.p.y - 55,
+                  text: `-${e.damage}`,
+                  life: 0.7,
+                  color: "#f2a18f",
+                });
                 persist();
                 message("受到攻击 · 留意红圈，空格闪避");
               }
             }
-          } else if (d < 64 && e.wait <= 0) e.wind = 0.8;
+          } else if (d < e.radius - 14 && e.wait <= 0) e.wind = e.windup;
           else if (d < 270 && d > 48) {
             const p = moveHero(
               e,
-              ((w.p.x - e.x) / d) * 65 * dt,
-              ((w.p.y - e.y) / d) * 65 * dt,
+              ((w.p.x - e.x) / d) * e.speed * dt,
+              ((w.p.y - e.y) / d) * e.speed * dt,
             );
             e.x = p.x;
             e.y = p.y;
@@ -366,6 +501,11 @@ export default function ActionWorld({
           });
           persist();
           message("灯火将你带回营地 · 已完成的探索保留");
+        }
+        if (w.time - w.savedAt > 1.5 && distance(w.p, w.savedPoint) > 15) {
+          w.savedAt = w.time;
+          w.savedPoint = { ...w.p };
+          persist();
         }
         const features = [
           { ...camp, kind: "camp", name: "营火 · 休整" },
@@ -590,18 +730,30 @@ export default function ActionWorld({
         .sort((a, b) => a.y - b.y)
         .forEach((e) => {
           if (e.wind > 0) {
-            ellipse(e.x, e.y, 77, 55, "#e7785540");
+            ellipse(e.x, e.y, e.radius, e.radius * 0.7, "#e7785540");
             ctx.strokeStyle = "#e9a37c";
             ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.arc(e.x, e.y, 78 * (1 - e.wind / 0.8), 0, Math.PI * 2);
+            ctx.arc(
+              e.x,
+              e.y,
+              e.radius * (1 - e.wind / e.windup),
+              0,
+              Math.PI * 2,
+            );
             ctx.stroke();
           }
           ellipse(e.x, e.y + 7, 19, 7, "#142b3166");
           const bob = Math.sin(w.time * 4 + e.x) * 4;
           ctx.save();
           ctx.translate(e.x, e.y + bob);
-          ctx.fillStyle = e.flash ? "#fff4c6" : "#7c9990";
+          ctx.fillStyle = e.flash
+            ? "#fff4c6"
+            : e.name === "石魇"
+              ? "#97917d"
+              : e.name === "疾影"
+                ? "#7c8f9c"
+                : "#7c9990";
           ctx.beginPath();
           ctx.moveTo(0, -43);
           ctx.lineTo(-16, -30);
@@ -623,7 +775,7 @@ export default function ActionWorld({
           rect(8, -9, 5, 11, "#aec2ac");
           ctx.restore();
           rect(e.x - 19, e.y - 49, 38, 4, "#172b29");
-          rect(e.x - 19, e.y - 49, (38 * e.hp) / 100, 4, "#cda17c");
+          rect(e.x - 19, e.y - 49, (38 * e.hp) / e.maxHp, 4, "#cda17c");
         });
       if (w.inv <= 0 || Math.floor(w.time * 14) % 2) person(w.p.x, w.p.y, true);
       if (w.slash > 0) {
@@ -631,7 +783,7 @@ export default function ActionWorld({
         ctx.strokeStyle = "#ffe4a6";
         ctx.lineWidth = 9;
         ctx.beginPath();
-        ctx.arc(w.p.x, w.p.y - 14, 65, a - 1.1, a + 1.1);
+        ctx.arc(w.p.x, w.p.y - 14, w.combo === 3 ? 95 : 65, a - 1.1, a + 1.1);
         ctx.stroke();
         ctx.strokeStyle = "#fff4d4";
         ctx.lineWidth = 2;
@@ -658,6 +810,14 @@ export default function ActionWorld({
         ctx.fillStyle = glow;
         ctx.fillRect(w.p.x - 100, w.p.y - 110, 200, 220);
       }
+      if (w.tracked) {
+        label(
+          w.tracked.x,
+          w.tracked.y - 65,
+          "◆ " + (w.tracked.name || "目的地"),
+          "#b8dfc1",
+        );
+      }
       if (w.target) {
         ctx.strokeStyle = "#e9d7a0";
         ctx.lineWidth = 2;
@@ -674,6 +834,21 @@ export default function ActionWorld({
             1.5,
             "#e1dca17a",
           );
+      for (const e of w.effects) {
+        ctx.globalAlpha = Math.min(1, e.life * 2);
+        ctx.font = "bold 18px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillStyle = e.color;
+        ctx.fillText(e.text, e.x, e.y);
+        ctx.globalAlpha = 1;
+      }
+      if (w.comboTime > 0 && w.combo > 1)
+        label(
+          w.p.x,
+          w.p.y - 78,
+          `${w.combo} 连击${w.combo === 3 ? " · 破势" : ""}`,
+          "#ffe1a0",
+        );
       const tints = [
         "#00000000",
         "#58a3b40b",
@@ -687,6 +862,10 @@ export default function ActionWorld({
       ctx.fillStyle = tints[chapter];
       ctx.fillRect(cx, cy, width / scale, height / scale);
       ctx.restore();
+      if (w.hurt > 0 && !props.current.reducedMotion) {
+        rect(0, 0, width, 4, "#dc8f73");
+        rect(0, height - 4, width, 4, "#dc8f73");
+      }
       // Mini-map is drawn in screen space.
       const mx = width - 138,
         my = 20;
@@ -695,6 +874,13 @@ export default function ActionWorld({
       chapters[chapter].nodes.forEach((n) => {
         const p = nodePoint(n);
         rect(mx + p.x / 14, my + p.y / 12.5, 3, 3, "#c4b27c");
+      });
+      caches.forEach((p, i) => {
+        if (!s.wilds?.includes(`${chapter}:chest${i}`))
+          rect(mx + p.x / 14, my + p.y / 12.5, 4, 4, "#e4c16f");
+      });
+      w.enemies.forEach((e) => {
+        if (e.hp > 0) rect(mx + e.x / 14, my + e.y / 12.5, 3, 3, "#df9b88");
       });
       rect(mx + w.p.x / 14 - 2, my + w.p.y / 12.5 - 2, 5, 5, "#fff2b9");
       ui += dt;
@@ -734,9 +920,10 @@ export default function ActionWorld({
     }
   }, [state.hp, state.mp]);
   useEffect(() => {
-    if (busy) input.current.clear();
-  }, [busy]);
+    if (busy || guide) input.current.clear();
+  }, [busy, guide]);
   const press = (kind) => controls.current?.(kind);
+  const progress = wildProgress(state);
   return (
     <div className="action-world">
       <canvas
@@ -838,6 +1025,15 @@ export default function ActionWorld({
             disabled={
               busy || (id === "magic" && (hud.mp < 2 || hud.cooldown > 0))
             }
+            onPointerDown={(e) => {
+              if (id === "attack") {
+                e.currentTarget.setPointerCapture(e.pointerId);
+                input.current.add("attack");
+              }
+            }}
+            onPointerUp={() => input.current.delete("attack")}
+            onPointerCancel={() => input.current.delete("attack")}
+            onLostPointerCapture={() => input.current.delete("attack")}
             onClick={() => press(id)}
           >
             <kbd>{key}</kbd>
@@ -845,6 +1041,54 @@ export default function ActionWorld({
           </button>
         ))}
       </div>
+      <div className="wild-objective">
+        <span>
+          {progress.claimed
+            ? "✓ 清雾委托已完成"
+            : progress.ready
+              ? "清雾完成 · 回营火领奖"
+              : "清雾委托"}
+        </span>
+        <small>
+          击退 {progress.kills}/5 · 宝箱 {progress.chests}/3
+        </small>
+        <div>
+          <button disabled={busy} onClick={() => press("track")}>
+            追踪探索
+          </button>
+          <button disabled={busy} onClick={() => press("story")}>
+            主线指引
+          </button>
+          <button disabled={busy} onClick={() => press("camp")}>
+            返回营火
+          </button>
+        </div>
+      </div>
+      <button
+        className="wild-guide-toggle"
+        onClick={() => setGuide((v) => !v)}
+        aria-expanded={guide}
+      >
+        操作 ?
+      </button>
+      {guide && (
+        <div className="wild-guide">
+          <b>先试试走动和挥刀</b>
+          <p>
+            WASD
+            或左下方向键移动。点击地面自动寻路，追踪探索会带你去未开启的宝箱。
+          </p>
+          <p>
+            长按 J
+            或挥刀按钮连续出招，自动朝向近敌，第三击可打断蓄力；命中回灵。K
+            灯术消耗 2 灵力，空格向朝向闪避。红圈是敌人攻击范围。
+          </p>
+          <p>
+            E 交互，H 恢复生命。清完 5 只雾灵、开启 3 箱，回营火领取委托奖励。
+          </p>
+          <button onClick={() => setGuide(false)}>开始探索</button>
+        </div>
+      )}
       <div className="wild-help">WASD 移动 · 点击地面行走 · 红圈出现时闪避</div>
     </div>
   );

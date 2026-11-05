@@ -22,6 +22,7 @@ try {
   }
 }
 import assert from "node:assert/strict";
+import { freshState } from "../../src/rpg/engine.mjs";
 import { mkdir } from "node:fs/promises";
 await mkdir("work", { recursive: true });
 const browser = await chromium.launch({
@@ -65,6 +66,11 @@ assert(saved.wilds.includes("0:chest0"), "cache should be persisted");
 await page.reload();
 await page.getByRole("button", { name: "继续旅途", exact: true }).click();
 assert.match(await page.locator(".wild-heading").innerText(), /木箱 1 \/ 3/);
+// Saved coordinates resume near the collected chest; use the actual route button to return.
+assert(saved.wildPosition && saved.wildPosition.chapter === 0);
+await page.getByRole("button", { name: "返回营火", exact: true }).click();
+await page.waitForTimeout(2200);
+await page.keyboard.press("e");
 // Move east over bridge; combat with nearby enemies using melee and lantern.
 await page.keyboard.down("d");
 await page.waitForTimeout(1300);
@@ -86,11 +92,102 @@ await page
   .getByRole("button", { name: "许婆婆的门灯，交谈", exact: true })
   .click();
 await page.getByRole("dialog").waitFor();
+await page.getByRole("button", { name: "略过对白", exact: true }).click();
+assert(
+  (
+    await page.evaluate(() =>
+      JSON.parse(localStorage.getItem("mist-lantern-save-v1")),
+    )
+  ).completed.includes("0:porch"),
+);
 assert.deepEqual(errors, []);
 console.log(
   "PASS desktop movement, camp, spell, cache save/reload, real combat, campaign interaction",
 );
 await page.close();
+const mission = await browser.newPage({
+  viewport: { width: 1440, height: 960 },
+});
+mission.on("pageerror", (e) => errors.push(e.message));
+await mission.addInitScript(
+  (value) => {
+    if (!sessionStorage.getItem("mission-seeded")) {
+      localStorage.setItem("mist-lantern-save-v1", JSON.stringify(value));
+      sessionStorage.setItem("mission-seeded", "1");
+    }
+  },
+  {
+    ...freshState(),
+    started: true,
+    wilds: [
+      "0:enemy1",
+      "0:enemy2",
+      "0:enemy3",
+      "0:enemy4",
+      "0:chest1",
+      "0:chest2",
+    ],
+  },
+);
+await mission.goto(baseURL);
+await mission.getByRole("button", { name: "继续旅途", exact: true }).click();
+await mission.keyboard.down("d");
+await mission.waitForTimeout(1250);
+await mission.keyboard.up("d");
+await mission.keyboard.down("j");
+await mission.waitForTimeout(2800);
+await mission.keyboard.up("j");
+await mission.getByRole("button", { name: "追踪探索", exact: true }).click();
+for (let i = 0; i < 16; i++) {
+  await mission.waitForTimeout(500);
+  const b = mission.locator(".wild-interact");
+  if ((await b.count()) && /旧木箱/.test(await b.innerText())) {
+    await b.click();
+    break;
+  }
+}
+await mission.getByRole("button", { name: "返回营火", exact: true }).click();
+await mission.waitForTimeout(2600);
+await mission.keyboard.press("e");
+await mission.waitForTimeout(250);
+const complete = await mission.evaluate(() =>
+  JSON.parse(localStorage.getItem("mist-lantern-save-v1")),
+);
+await mission.screenshot({ path: "work/mission-check.png" });
+assert(
+  complete.wilds.includes("0:bounty"),
+  "completed mission should grant its reward at the camp",
+);
+const coins = complete.coins;
+await mission.keyboard.press("e");
+await mission.waitForTimeout(100);
+assert.equal(
+  await mission.evaluate(
+    () => JSON.parse(localStorage.getItem("mist-lantern-save-v1")).coins,
+  ),
+  coins,
+);
+await mission.getByRole("button", { name: "操作 ?", exact: true }).click();
+await mission.getByRole("button", { name: "开始探索", exact: true }).click();
+const beforeDash = complete.wildPosition;
+await mission.keyboard.press(" ");
+await mission.waitForTimeout(1900);
+const checkpoint = await mission.evaluate(
+  () => JSON.parse(localStorage.getItem("mist-lantern-save-v1")).wildPosition,
+);
+assert(
+  Math.hypot(checkpoint.x - beforeDash.x, checkpoint.y - beforeDash.y) > 45,
+  "stationary dodge should actually move",
+);
+await mission.reload();
+await mission.getByRole("button", { name: "继续旅途", exact: true }).click();
+assert.match(await mission.locator(".wild-objective").innerText(), /已完成/);
+assert.deepEqual(errors, []);
+console.log(
+  "PASS hold combo, objective tracking, mission completion, one-time bounty and controls guide",
+);
+await mission.close();
+
 const mobile = await browser.newPage({
   viewport: { width: 390, height: 844 },
   isMobile: true,

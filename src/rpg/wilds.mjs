@@ -30,31 +30,38 @@ export function moveHero(p, dx, dy) {
 }
 export function claimWildReward(state, id) {
   if (
-    !/^[0-7]:(enemy[0-4]|chest[0-2])$/.test(id) ||
+    !/^[0-7]:(enemy[0-4]|chest[0-2]|bounty)$/.test(id) ||
     Number(id[0]) !== state.chapter ||
     state.wilds?.includes(id)
   )
     return state;
-  const chest = id.includes("chest");
+  const chest = id.includes("chest"),
+    bounty = id.endsWith(":bounty");
+  if (bounty && !wildProgress(state).ready) return state;
   return {
     ...state,
     wilds: [...(state.wilds || []), id],
-    coins: Math.min(1000000, state.coins + (chest ? 24 : 12)),
-    xp: Math.min(100000, state.xp + (chest ? 10 : 18)),
+    coins: Math.min(1000000, state.coins + (bounty ? 100 : chest ? 24 : 12)),
+    xp: Math.min(100000, state.xp + (bounty ? 60 : chest ? 10 : 18)),
     herbs: Math.min(9999, state.herbs + (chest ? 1 : 0)),
+    oil: Math.min(9999, state.oil + (bounty ? 1 : 0)),
   };
 }
-export function hitEnemies(enemies, hero, facing, magic = false) {
+export function hitEnemies(enemies, hero, facing, magic = false, power = {}) {
   return enemies.map((e) => {
     const dx = e.x - hero.x,
       dy = e.y - hero.y,
       d = Math.hypot(dx, dy);
     const hit =
       e.hp > 0 &&
-      d < (magic ? 170 : 94) &&
+      d < (magic ? 170 : power.range || 94) &&
       (magic || d < 30 || (dx * facing.x + dy * facing.y) / d > 0.1);
     return hit
-      ? { ...e, hp: Math.max(0, e.hp - (magic ? 65 : 34)), flash: 0.18 }
+      ? {
+          ...e,
+          hp: Math.max(0, e.hp - (power.damage || (magic ? 65 : 34))),
+          flash: 0.18,
+        }
       : e;
   });
 }
@@ -95,4 +102,35 @@ export function findPath(start, goal) {
     }
   }
   return [];
+}
+
+export function wildProgress(state) {
+  const prefix = `${state.chapter}:`,
+    records = state.wilds || [];
+  const kills = records.filter((id) => id.startsWith(prefix + "enemy")).length;
+  const chests = records.filter((id) => id.startsWith(prefix + "chest")).length;
+  return {
+    kills,
+    chests,
+    ready: kills === 5 && chests === 3,
+    claimed: records.includes(prefix + "bounty"),
+  };
+}
+export function attackProfile(combo, gear = 1) {
+  return {
+    damage: [28, 35, 55][Math.max(0, Math.min(2, combo - 1))] + (gear - 1) * 5,
+    range: combo === 3 ? 125 : 94,
+  };
+}
+export function enemyProfile(index, chapter = 0) {
+  const type = index % 3;
+  return {
+    name: ["游雾", "疾影", "石魇"][type],
+    maxHp: [100, 82, 140][type] + chapter * 12,
+    speed: [65, 95, 42][type],
+    windup: [0.8, 0.48, 1.15][type],
+    radius: [78, 65, 110][type],
+    damage: [15, 10, 23][type] + chapter * 2,
+    recovery: [1.3, 0.9, 1.8][type],
+  };
 }
