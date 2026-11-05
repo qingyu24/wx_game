@@ -11,6 +11,7 @@ try {
     ["node_modules/vite/bin/vite.js", "--host", "127.0.0.1", "--port", "3000"],
     { stdio: "ignore" },
   );
+  server.unref();
   process.on("exit", () => server?.kill());
   for (let i = 0; i < 100; i++) {
     try {
@@ -208,3 +209,4 @@ await mobile.locator(".wild-actions button").first().tap();
 assert.deepEqual(errors, []);
 console.log("PASS mobile layout and touch attack");
 await browser.close();
+server?.kill();
