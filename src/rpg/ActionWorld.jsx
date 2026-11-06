@@ -1,8 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
+import { Swords, Flame, Wind, Heart, Crosshair } from "lucide-react";
+import { loadPaintedAssets, drawCutout, drawPaintedHero } from "./painted.mjs";
 import { chapters } from "./content.mjs";
 import { done, requirements, stats } from "./engine.mjs";
 import {
   WORLD,
+  LAYOUT_VERSION,
+  riverCenter,
   camp,
   caches,
   spawns,
@@ -31,6 +35,11 @@ export default function ActionWorld({
   const canvas = useRef(),
     live = useRef(),
     input = useRef(new Set()),
+    analog = useRef({ x: 0, y: 0 }),
+    stickPointer = useRef(null),
+    artRef = useRef(null),
+    [artStatus, setArtStatus] = useState("loading"),
+    [stick, setStick] = useState({ x: 0, y: 0 }),
     controls = useRef(),
     [guide, setGuide] = useState(false),
     [hud, setHud] = useState({
@@ -46,16 +55,32 @@ export default function ActionWorld({
     state,
     onChange,
     onNode,
-    busy: busy || guide,
+    busy: busy || guide || artStatus !== "ready",
     reducedMotion,
   };
+  useEffect(() => {
+    let active = true;
+    loadPaintedAssets()
+      .then((assets) => {
+        if (active) {
+          artRef.current = assets;
+          setArtStatus("ready");
+        }
+      })
+      .catch(() => {
+        if (active) setArtStatus("error");
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
   useEffect(() => {
     const chapter = state.chapter;
     const world = {
       p:
         state.wildPosition?.chapter === chapter
           ? { x: state.wildPosition.x, y: state.wildPosition.y }
-          : { ...camp },
+          : { x: camp.x + 42, y: camp.y + 28 },
       face: { x: 1, y: 0 },
       enemies: spawns.map((p, i) => ({
         ...p,
@@ -84,7 +109,14 @@ export default function ActionWorld({
       effects: [],
       hurt: 0,
       tracked: null,
+      locked: null,
+      queued: null,
+      hitstop: 0,
+      particles: [],
+      projectiles: [],
+      repath: 0,
       message: "沿石径探索 · 靠近人物按 E 交谈",
+      messageTime: 0,
       target: null,
       near: null,
     };
@@ -100,10 +132,16 @@ export default function ActionWorld({
         ...s,
         hp: Math.max(1, Math.round(world.hp)),
         mp: world.mp,
-        wildPosition: { chapter, x: world.p.x, y: world.p.y },
+        wildPosition: {
+          chapter,
+          x: world.p.x,
+          y: world.p.y,
+          layoutVersion: LAYOUT_VERSION,
+        },
       }));
     const message = (t) => {
       world.message = t;
+      world.messageTime = world.time;
     };
     function strike(magic, power) {
       const before = world.enemies;
@@ -113,6 +151,27 @@ export default function ActionWorld({
         const damage = before[i].hp - e.hp;
         if (damage > 0) {
           connected = true;
+          world.hitstop = magic ? 0.025 : 0.045;
+          const d = distance(e, world.p) || 1;
+          if (!magic) {
+            const pos = moveHero(
+              e,
+              ((e.x - world.p.x) / d) * (world.combo === 3 ? 25 : 10),
+              ((e.y - world.p.y) / d) * (world.combo === 3 ? 25 : 10),
+            );
+            e.x = pos.x;
+            e.y = pos.y;
+            e.stagger = 0.14;
+          }
+          for (let j = 0; j < 7; j++)
+            world.particles.push({
+              x: e.x,
+              y: e.y - 30,
+              vx: (Math.random() - 0.5) * 140,
+              vy: -35 - Math.random() * 70,
+              life: 0.3 + Math.random() * 0.3,
+              color: magic ? "#98d8d3" : "#efd29b",
+            });
           world.effects.push({
             x: e.x,
             y: e.y - 45,
@@ -120,7 +179,7 @@ export default function ActionWorld({
             life: 0.75,
             color: magic ? "#a6e7dc" : "#ffe2a0",
           });
-          if (!magic && world.combo === 3) {
+          if (!magic && world.combo === 3 && (e.type !== 2 || e.wind < 0.45)) {
             e.wind = 0;
             e.wait = 0.8;
           }
@@ -153,6 +212,7 @@ export default function ActionWorld({
         }
         world.combo = world.comboTime > 0 ? (world.combo % 3) + 1 : 1;
         world.comboTime = 1;
+        world.swingFace = { ...world.face };
         world.slash = 0.24;
         world.attackCd = world.combo === 3 ? 0.5 : 0.3;
         strike(
@@ -191,6 +251,7 @@ export default function ActionWorld({
             message("清雾委托完成 · +100铜钱 · +60阅历 · +1灯油");
           } else message("营火休整 · 生命与灵力已恢复");
         } else if (n.kind === "chest") {
+          persist();
           props.current.onChange((s) => claimWildReward(s, n.id));
           message("获得 24 铜钱 · 10 阅历 · 1 药草");
         } else {
@@ -215,7 +276,46 @@ export default function ActionWorld({
     controls.current = (kind) => {
       if (props.current.busy || hidden) return;
       const s = props.current.state;
-      if (kind === "track") {
+      const hunt = (enemy) => {
+        if (!enemy) return;
+        world.locked = enemy.id;
+        world.queued = null;
+        navigate({ ...enemy, name: enemy.name });
+      };
+      if (typeof kind === "object" && kind.point) {
+        const point = kind.point,
+          enemy = world.enemies
+            .filter((e) => e.hp > 0 && distance(e, point) < 55)
+            .sort((a, b) => distance(a, point) - distance(b, point))[0];
+        if (enemy) {
+          hunt(enemy);
+          return;
+        }
+        const features = [
+          { ...camp, kind: "camp", name: "营火" },
+          ...caches
+            .map((p, i) => ({
+              ...p,
+              kind: "chest",
+              name: "旧木箱",
+              id: `${chapter}:chest${i}`,
+            }))
+            .filter((n) => !s.wilds?.includes(n.id)),
+          ...chapters[chapter].nodes.map((n) => ({ ...n, ...nodePoint(n) })),
+        ];
+        const feature = features
+          .filter((n) => distance(n, point) < 45)
+          .sort((a, b) => distance(a, point) - distance(b, point))[0];
+        world.locked = null;
+        world.queued = feature || null;
+        navigate(feature || point);
+      } else if (kind === "hunt")
+        hunt(
+          world.enemies
+            .filter((e) => e.hp > 0)
+            .sort((a, b) => distance(a, world.p) - distance(b, world.p))[0],
+        );
+      else if (kind === "track") {
         const chest = caches
           .map((p, i) => ({
             ...p,
@@ -227,16 +327,25 @@ export default function ActionWorld({
         const enemy = world.enemies
           .filter((e) => e.hp > 0)
           .sort((a, b) => distance(a, world.p) - distance(b, world.p))[0];
+        world.locked = null;
+        world.queued = null;
         navigate(chest || enemy || { ...camp, name: "营火 · 交付委托" });
-      } else if (kind === "camp") navigate({ ...camp, name: "营火" });
-      else if (kind === "story") {
+      } else if (kind === "camp") {
+        world.locked = null;
+        world.queued = null;
+        navigate({ ...camp, name: "营火" });
+      } else if (kind === "story") {
         const n = chapters[chapter].nodes.find(
           (n) =>
             n.kind !== "side" &&
             !done(s, chapter, n.id) &&
             !requirements(s, chapter, n).length,
         );
-        if (n) navigate({ ...nodePoint(n), name: n.name });
+        if (n) {
+          world.locked = null;
+          world.queued = null;
+          navigate({ ...nodePoint(n), name: n.name });
+        }
       } else action(kind);
     };
     const key = (e) => {
@@ -305,99 +414,16 @@ export default function ActionWorld({
       ctx.fillStyle = color;
       ctx.fillText(text, x, y);
     }
-    function tree(x, y, s = 1) {
-      ellipse(x, y + 4, 24 * s, 10 * s, "#091c2255");
-      rect(x - 4 * s, y - 27 * s, 8 * s, 30 * s, "#5f5c44");
-      rect(x - 1 * s, y - 32 * s, 2 * s, 31 * s, "#a08b5d");
-      if (noise(x, y) > 0.42) {
-        for (let i = 0; i < 12; i++) {
-          const xx = x + (noise(i, x) - 0.5) * 49 * s,
-            yy = y - 48 * s + (noise(i, y) - 0.5) * 38 * s;
-          const size = (19 + noise(i, 1) * 12) * s;
-          rect(
-            xx - size / 2,
-            yy - size / 2,
-            size,
-            size,
-            ["#27483b", "#355a43", "#466b4e", "#557b53"][i % 4],
-          );
-          rect(
-            xx - size / 2 + 3 * s,
-            yy - size / 2,
-            size - 6 * s,
-            3 * s,
-            "#6a8a5b66",
-          );
-        }
-      } else {
-        for (let i = 0; i < 3; i++) {
-          const yy = y - 26 * s - i * 18 * s;
-          ctx.fillStyle = ["#294c43", "#345c4a", "#47705a"][i];
-          ctx.beginPath();
-          ctx.moveTo(x, yy - 36 * s);
-          ctx.lineTo(x - 29 * s + i * 5, yy + 12 * s);
-          ctx.lineTo(x + 29 * s - i * 5, yy + 12 * s);
-          ctx.fill();
-          for (let j = 0; j < 4; j++)
-            rect(
-              x - (18 - j * 3) * s,
-              yy + (7 - j * 8) * s,
-              (7 + (j % 2) * 4) * s,
-              3 * s,
-              "#79956844",
-            );
-        }
-      }
-    }
-    function person(x, y, hero = false) {
-      const walk = hero && world.walk ? Math.sin(world.time * 16) * 3 : 0;
-      ellipse(x, y + 7, 14, 6, "#061d2377");
-      rect(x - 8, y - 7, 6, 15 + walk, "#26333b");
-      rect(x + 2, y - 7, 6, 15 - walk, "#26333b");
-      rect(x - 12, y - 30, 24, 25, hero ? "#93b6ad" : "#a98c67");
-      rect(x - 8, y - 47, 16, 19, "#d5b78c");
-      rect(x - 10, y - 49, 20, 9, "#243339");
-      rect(x - 13, y - 31, 5, 25, hero ? "#dfd2aa" : "#605858");
-      rect(x + 13, y - 16, 8, 11, "#f1c67c");
-      ellipse(x + 17, y - 11, 17, 17, "#f8c46620");
-      rect(x + 15, y - 14, 4, 6, "#fff0ad");
-      if (hero) {
-        rect(x - 18, y - 12, 3, 26, "#c2c9b2");
-        rect(x - 22, y - 13, 11, 3, "#e2c58a");
-      }
-    }
-    function house(x, y) {
-      ellipse(x, y + 18, 70, 20, "#102d2855");
-      rect(x - 55, y - 62, 110, 78, "#b5ac85");
-      rect(x - 48, y - 53, 96, 67, "#7f8b72");
-      rect(x - 15, y - 25, 25, 40, "#33443e");
-      rect(x - 42, y - 40, 20, 22, "#e4c383");
-      rect(x + 25, y - 40, 20, 22, "#e4c383");
-      for (let r = 0; r < 6; r++) {
-        rect(
-          x - 70 + r * 8,
-          y - 106 + r * 8,
-          140 - r * 16,
-          10,
-          r % 2 ? "#3f5c59" : "#4b6e67",
-        );
-      }
-      rect(x - 67, y - 62, 134, 6, "#293f3d");
-      for (let j = 0; j < 6; j++)
-        rect(x - 45 + j * 17, y - 52, 2, 65, "#566e5944");
-      rect(x + 8, y - 8, 3, 4, "#dfc787");
-      rect(x - 40, y - 39, 2, 20, "#645f46");
-      rect(x - 43, y - 30, 20, 2, "#645f46");
-      rect(x + 26, y - 30, 18, 2, "#645f46");
-      rect(x + 34, y - 39, 2, 20, "#645f46");
-      rect(x + 44, y - 101, 15, 28, "#627a68");
-      rect(x + 43, y - 105, 18, 5, "#8c9680");
-      rect(x - 73, y + 17, 146, 5, "#67775e");
-    }
     function render(dt) {
       const { state: s, busy: paused } = props.current;
       const w = world;
+      const realDt = dt;
+      if (w.hitstop > 0) {
+        w.hitstop = Math.max(0, w.hitstop - realDt);
+        dt = 0;
+      }
       w.time += paused || hidden ? 0 : dt;
+      if (w.time - (w.messageTime || 0) > 7) w.message = "";
       if (!paused && !hidden) {
         for (const k of [
           "slash",
@@ -423,7 +449,30 @@ export default function ActionWorld({
           dy =
             (keys.has("s") || keys.has("arrowdown") ? 1 : 0) -
             (keys.has("w") || keys.has("arrowup") ? 1 : 0);
+        if (Math.hypot(analog.current.x, analog.current.y) > 0.15) {
+          dx = analog.current.x;
+          dy = analog.current.y;
+        }
         const len = Math.hypot(dx, dy);
+        w.repath = Math.max(0, w.repath - dt);
+        if (w.locked) {
+          const enemy = w.enemies.find((e) => e.id === w.locked && e.hp > 0);
+          if (!enemy) {
+            w.locked = null;
+            w.target = null;
+            w.route = [];
+          } else if (!len && w.dash <= 0) {
+            if (distance(enemy, w.p) < 88) {
+              w.target = null;
+              w.route = [];
+              action("attack");
+            } else if (w.repath <= 0) {
+              w.route = findPath(w.p, enemy);
+              w.target = w.route.shift() || null;
+              w.repath = 0.45;
+            }
+          }
+        }
         w.walk = !!len;
         if (len) {
           dx /= len;
@@ -431,6 +480,7 @@ export default function ActionWorld({
           w.face = { x: dx, y: dy };
           w.target = null;
           w.route = [];
+          w.queued = null;
         } else if (w.target) {
           const d = distance(w.p, w.target);
           if (d < 8) w.target = w.route?.shift() || null;
@@ -451,6 +501,8 @@ export default function ActionWorld({
         w.p = moveHero(w.p, dx * dt * speed, dy * dt * speed);
         w.enemies.forEach((e) => {
           e.flash = Math.max(0, e.flash - dt);
+          e.stagger = Math.max(0, (e.stagger || 0) - dt);
+          e.attackFlash = Math.max(0, (e.attackFlash || 0) - dt);
           if (e.hp <= 0) {
             if (!s.wilds?.includes(e.id) && !e.rewarded) {
               e.rewarded = true;
@@ -465,7 +517,20 @@ export default function ActionWorld({
             e.wind -= dt;
             if (e.wind <= 0) {
               e.wait = e.recovery;
-              if (d < e.radius && w.inv <= 0) {
+              e.attackFlash = 0.28;
+              if (e.type === 0) {
+                const aim = e.aim || w.p,
+                  len = Math.hypot(aim.x - e.x, aim.y - e.y) || 1;
+                w.projectiles.push({
+                  x: e.x,
+                  y: e.y - 8,
+                  vx: ((aim.x - e.x) / len) * 215,
+                  vy: ((aim.y - e.y) / len) * 215,
+                  life: 3,
+                  damage: e.damage,
+                });
+              }
+              if (e.type !== 0 && d < e.radius && w.inv <= 0) {
                 w.hp = Math.max(0, w.hp - e.damage);
                 w.inv = 0.6;
                 w.hurt = 0.2;
@@ -480,8 +545,11 @@ export default function ActionWorld({
                 message("受到攻击 · 留意红圈，空格闪避");
               }
             }
-          } else if (d < e.radius - 14 && e.wait <= 0) e.wind = e.windup;
-          else if (d < 270 && d > 48) {
+          } else if (e.stagger > 0) {
+          } else if (d < (e.type === 0 ? 180 : e.radius - 14) && e.wait <= 0) {
+            e.wind = e.windup * (e.type === 2 && e.hp < e.maxHp / 2 ? 0.72 : 1);
+            e.aim = { ...w.p };
+          } else if (d < 270 && d > 48) {
             const p = moveHero(
               e,
               ((w.p.x - e.x) / d) * e.speed * dt,
@@ -491,8 +559,33 @@ export default function ActionWorld({
             e.y = p.y;
           }
         });
+        w.projectiles = w.projectiles.filter((projectile) => {
+          projectile.x += projectile.vx * dt;
+          projectile.y += projectile.vy * dt;
+          projectile.life -= dt;
+          if (distance(projectile, w.p) < 18 && w.inv <= 0) {
+            w.hp = Math.max(0, w.hp - projectile.damage);
+            w.inv = 0.6;
+            w.hurt = 0.2;
+            w.effects.push({
+              x: w.p.x,
+              y: w.p.y - 50,
+              text: `-${projectile.damage}`,
+              life: 0.7,
+              color: "#f2a18f",
+            });
+            persist();
+            return false;
+          }
+          return projectile.life > 0;
+        });
         if (w.hp <= 0) {
-          w.p = { ...camp };
+          w.p = { x: camp.x + 42, y: camp.y + 28 };
+          w.projectiles = [];
+          w.locked = null;
+          w.queued = null;
+          w.target = null;
+          w.route = [];
           w.hp = stats(s).maxHp;
           w.mp = 6;
           w.inv = 2;
@@ -523,6 +616,21 @@ export default function ActionWorld({
           features
             .filter((n) => distance(n, w.p) < 85)
             .sort((a, b) => distance(a, w.p) - distance(b, w.p))[0] || null;
+        if (w.queued && distance(w.queued, w.p) < 62) {
+          const desired = w.queued;
+          w.queued = null;
+          w.target = null;
+          w.route = [];
+          w.near = desired;
+          action("interact");
+        }
+        w.particles = w.particles.filter((p) => {
+          p.life -= dt;
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          p.vy += 80 * dt;
+          return p.life > 0;
+        });
       }
       const box = el.getBoundingClientRect();
       const width = box.width,
@@ -537,249 +645,201 @@ export default function ActionWorld({
         el.height = Math.round(height * ratio);
       }
       ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-      ctx.imageSmoothingEnabled = false;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
       rect(0, 0, width, height, "#192f2c");
       const scale = Math.max(0.65, Math.min(1.1, width / 850));
-      const cx = Math.max(
+      const desiredX = Math.max(
           0,
           Math.min(WORLD.width - width / scale, w.p.x - width / scale / 2),
         ),
-        cy = Math.max(
+        desiredY = Math.max(
           0,
           Math.min(WORLD.height - height / scale, w.p.y - height / scale / 2),
         );
+      const smooth = 1 - Math.exp(-realDt * 8);
+      const cx = w.camera
+          ? w.camera.cx + (desiredX - w.camera.cx) * smooth
+          : desiredX,
+        cy = w.camera
+          ? w.camera.cy + (desiredY - w.camera.cy) * smooth
+          : desiredY;
       w.camera = { cx, cy, scale };
+      const assets = artRef.current;
+      if (!assets) return;
       ctx.save();
       ctx.scale(scale, scale);
-      ctx.translate(-cx, -cy);
-      for (let y = 0; y < 1000; y += 24)
-        for (let x = 0; x < 1440; x += 24) {
-          const n = noise(x, y);
-          rect(
-            x,
-            y,
-            24,
-            24,
-            ["#355344", "#385849", "#3c5c49", "#3a5746"][Math.floor(n * 4)],
-          );
-          if (n > 0.64) {
-            rect(x + 4, y + 8, 2, 5, "#68826477");
-            rect(x + 8, y + 9, 2, 3, "#68826477");
-          }
-        }
-      for (let i = 0; i < 170; i++) {
-        const x = 50 + noise(i, 20) * 1340,
-          y = 90 + noise(i, 21) * 840;
-        if (x > 610 && x < 745) continue;
-        if (i % 4 === 0) {
-          ellipse(x, y, 9, 4, "#1d3c3233");
-          rect(x - 5, y - 8, 11, 7, "#7d8c76");
-          rect(x - 3, y - 10, 7, 3, "#a3ab8a");
-        } else if (i % 4 === 1) {
-          for (let j = 0; j < 3; j++) {
-            rect(x + j * 5, y - (j % 2) * 4, 2, 7, "#819263");
-            rect(
-              x + j * 5 - 1,
-              y - (j % 2) * 4 - 2,
-              4,
-              3,
-              i % 3 ? "#b5b795" : "#d4c17f",
-            );
-          }
-        } else {
-          rect(x, y, 2, 8, "#759262");
-          rect(x - 3, y + 2, 2, 5, "#759262");
-          rect(x + 3, y + 1, 2, 5, "#759262");
-        }
-      }
-      // Winding flagstone roads through the village and across the bridges.
-      ctx.strokeStyle = "#858775";
-      ctx.lineWidth = 58;
-      ctx.lineCap = "round";
-      ctx.beginPath();
-      ctx.moveTo(220, 910);
-      ctx.lineTo(430, 700);
-      ctx.lineTo(900, 720);
-      ctx.lineTo(1120, 500);
-      ctx.lineTo(1170, 230);
-      ctx.stroke();
-      ctx.lineWidth = 38;
-      ctx.strokeStyle = "#a3a08a";
-      ctx.stroke();
-      rect(638, 0, 80, 1000, "#2c6262");
-      rect(629, 0, 10, 1000, "#577466");
-      rect(718, 0, 11, 1000, "#577466");
-      for (let i = 0; i < 65; i++) {
-        let yy = (i * 21 + w.time * 13) % 1000;
-        rect(650 + noise(i, 3) * 45, yy, 8 + noise(i, 5) * 18, 2, "#80b7a444");
-      }
-      [304, 722].forEach((y) => {
-        rect(619, y - 35, 116, 70, "#655f49");
-        for (let x = 620; x < 734; x += 10) rect(x, y - 31, 8, 62, "#b09b73");
-        rect(612, y - 40, 130, 6, "#d0bc90");
-        rect(612, y + 35, 130, 6, "#d0bc90");
-      });
-      for (let i = 0; i < 125; i++) {
-        const x = 60 + noise(i, 1) * 1320,
-          y = 100 + noise(i, 2) * 830;
-        if (
-          (x > 590 && x < 760) ||
-          Math.abs(y - 720) < 95 ||
-          chapters[chapter].nodes.some(
-            (n) => distance({ x, y }, nodePoint(n)) < 85,
-          ) ||
-          distance({ x, y }, camp) < 100
-        )
-          continue;
-        tree(x, y, 0.7 + noise(i, 4) * 0.6);
-      }
-      house(280, 570);
-      house(410, 280);
-      house(1040, 210);
-      // Village fences, stacked firewood and hanging lanterns.
-      for (const [fx, fy] of [
-        [190, 610],
-        [310, 610],
-        [335, 330],
-        [1095, 250],
-      ]) {
-        rect(fx, fy - 16, 70, 4, "#a1936c");
-        rect(fx, fy - 7, 70, 3, "#8e835e");
-        for (let j = 0; j < 5; j++) {
-          rect(fx + j * 17, fy - 23, 4, 28, "#b0a27b");
-          rect(fx + j * 17, fy - 25, 3, 3, "#d0bc8e");
-        }
-      }
-      for (const [px, py] of [
-        [370, 610],
-        [440, 355],
-        [960, 270],
-      ]) {
-        rect(px, py - 65, 5, 70, "#5d6247");
-        rect(px, py - 65, 28, 4, "#8f8c61");
-        rect(px + 22, py - 62, 2, 10, "#bdab79");
-        rect(px + 15, py - 51, 17, 21, "#be9658");
-        rect(px + 18, py - 49, 11, 17, "#f2cc80");
-        rect(px + 15, py - 52, 17, 3, "#635b41");
-        rect(px + 15, py - 31, 17, 3, "#635b41");
-        ellipse(px + 23, py - 40, 31, 30, "#f4d18a0b");
-      }
-      for (let j = 0; j < 6; j++) {
-        rect(190 + (j % 3) * 10, 590 - Math.floor(j / 3) * 8, 9, 7, "#927c55");
-        rect(192 + (j % 3) * 10, 591 - Math.floor(j / 3) * 8, 3, 4, "#b19a6c");
-      }
-
-      // Old shrine.
-      rect(1095, 440, 140, 76, "#6c7a70");
-      for (let i = 0; i < 4; i++)
-        rect(1090 + i * 7, 508 + i * 7, 150 - i * 14, 7, "#9b9d81");
-      rect(1110, 383, 13, 90, "#a8aa88");
-      rect(1210, 383, 13, 90, "#a8aa88");
-      rect(1094, 373, 144, 17, "#b5b28e");
-      rect(1130, 407, 60, 66, "#365452");
+      const shake =
+        w.hurt > 0 && !props.current.reducedMotion
+          ? Math.sin(w.time * 110) * 3
+          : 0;
+      ctx.translate(-cx + shake, -cy);
+      ctx.drawImage(assets.village.image, 0, 0, WORLD.width, WORLD.height);
       caches.forEach((p, i) => {
-        const open = s.wilds?.includes(`${chapter}:chest${i}`);
-        rect(p.x - 16, p.y - 15, 32, 24, open ? "#535e4b" : "#98764a");
-        rect(p.x - 18, p.y - 17, 36, 8, open ? "#495644" : "#c2a267");
-        if (!open) rect(p.x - 2, p.y - 8, 5, 7, "#f3d88f");
-      });
-      ellipse(camp.x, camp.y, 23, 10, "#af9567");
-      for (let i = 0; i < 6; i++) {
-        const a = (i * Math.PI) / 3;
-        rect(
-          camp.x + Math.cos(a) * 19 - 4,
-          camp.y + Math.sin(a) * 8,
-          8,
-          6,
-          "#b9b09a",
-        );
-      }
-      ellipse(camp.x, camp.y - 10, 8, 16 + Math.sin(w.time * 8) * 3, "#e59c4c");
-      ellipse(camp.x, camp.y - 8, 4, 10, "#ffdfa0");
-      label(camp.x, camp.y - 39, "营火");
-      chapters[chapter].nodes.forEach((n) => {
-        const p = nodePoint(n),
-          complete = done(s, chapter, n.id),
-          locked = requirements(s, chapter, n).length > 0;
-        if (["talk", "side", "choice"].includes(n.kind)) person(p.x, p.y);
-        else {
-          rect(
-            p.x - 12,
-            p.y - 24,
-            24,
-            30,
-            n.kind === "boss" ? "#746386" : "#92987d",
-          );
-          rect(
-            p.x - 6,
-            p.y - 20,
-            12,
-            14,
-            complete ? "#6a9983" : locked ? "#5d6b62" : "#e0c17a",
-          );
-        }
-        label(
+        const opened = s.wilds?.includes(`${chapter}:chest${i}`);
+        drawCutout(
+          ctx,
+          assets.props,
+          opened ? 1 : 0,
           p.x,
-          p.y - 58,
-          `${complete ? "✓ " : locked ? "· " : ""}${n.name}`,
-          complete ? "#a2c5b1" : locked ? "#a2aaa0" : "#f0dfb5",
+          p.y,
+          opened ? 34 : 39,
         );
+      });
+      drawCutout(ctx, assets.props, 2, camp.x, camp.y, 46);
+      const campGlow = ctx.createRadialGradient(
+        camp.x,
+        camp.y - 20,
+        3,
+        camp.x,
+        camp.y - 20,
+        75,
+      );
+      campGlow.addColorStop(0, "#eeb56130");
+      campGlow.addColorStop(1, "#eeb56100");
+      ctx.fillStyle = campGlow;
+      ctx.fillRect(camp.x - 80, camp.y - 90, 160, 150);
+      const actors = [];
+      chapters[chapter].nodes.forEach((n) => {
+        const p = nodePoint(n);
+        actors.push({ type: "node", n, x: p.x, y: p.y });
       });
       w.enemies
         .filter((e) => e.hp > 0)
-        .sort((a, b) => a.y - b.y)
         .forEach((e) => {
           if (e.wind > 0) {
-            ellipse(e.x, e.y, e.radius, e.radius * 0.7, "#e7785540");
-            ctx.strokeStyle = "#e9a37c";
+            ellipse(e.x, e.y, e.radius, e.radius * 0.66, "#d76e5138");
+            ctx.strokeStyle = "#e8a285";
             ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.arc(
+            ctx.ellipse(
               e.x,
               e.y,
               e.radius * (1 - e.wind / e.windup),
+              e.radius * 0.66 * (1 - e.wind / e.windup),
+              0,
               0,
               Math.PI * 2,
             );
             ctx.stroke();
           }
-          ellipse(e.x, e.y + 7, 19, 7, "#142b3166");
-          const bob = Math.sin(w.time * 4 + e.x) * 4;
-          ctx.save();
-          ctx.translate(e.x, e.y + bob);
-          ctx.fillStyle = e.flash
-            ? "#fff4c6"
-            : e.name === "石魇"
-              ? "#97917d"
-              : e.name === "疾影"
-                ? "#7c8f9c"
-                : "#7c9990";
-          ctx.beginPath();
-          ctx.moveTo(0, -43);
-          ctx.lineTo(-16, -30);
-          ctx.lineTo(-21, -5);
-          ctx.lineTo(-29, 7);
-          ctx.lineTo(-11, 1);
-          ctx.lineTo(-4, 10);
-          ctx.lineTo(3, 1);
-          ctx.lineTo(16, 7);
-          ctx.lineTo(23, 1);
-          ctx.lineTo(16, -30);
-          ctx.closePath();
-          ctx.fill();
-          rect(-12, -29, 25, 17, "#263f3e");
-          rect(-7, -24, 5, 4, "#edcd86");
-          rect(5, -24, 5, 4, "#edcd86");
-          rect(-2, -36, 7, 5, "#b2c0a1");
-          rect(-15, -7, 6, 9, "#526e63");
-          rect(8, -9, 5, 11, "#aec2ac");
-          ctx.restore();
-          rect(e.x - 19, e.y - 49, 38, 4, "#172b29");
-          rect(e.x - 19, e.y - 49, (38 * e.hp) / e.maxHp, 4, "#cda17c");
+          if (e.id === w.locked) {
+            ctx.strokeStyle = "#f2d4a0";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.ellipse(e.x, e.y + 2, 32, 11, 0, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          actors.push({ type: "enemy", e, x: e.x, y: e.y });
         });
-      if (w.inv <= 0 || Math.floor(w.time * 14) % 2) person(w.p.x, w.p.y, true);
+      actors.push({ type: "hero", x: w.p.x, y: w.p.y });
+      actors.sort((a, b) => a.y - b.y);
+      for (const actor of actors) {
+        if (actor.type === "hero") {
+          ellipse(w.p.x, w.p.y + 2, 15, 6, "#0a181d77");
+          drawPaintedHero(ctx, assets, w);
+        } else if (actor.type === "enemy") {
+          const e = actor.e,
+            index = Number(e.id.at(-1)) % 3,
+            dx = w.p.x - e.x,
+            dy = w.p.y - e.y,
+            d = Math.hypot(dx, dy) || 1;
+          const lunge = Math.sin(((e.attackFlash || 0) / 0.28) * Math.PI) * 14;
+          const bob =
+            index === 0
+              ? Math.sin(w.time * 5 + e.x) * 4
+              : Math.sin(w.time * 3) * 1.5;
+          ellipse(e.x, e.y + 3, index === 2 ? 23 : 20, 8, "#0b1a2077");
+          ctx.save();
+          if (e.flash > 0) ctx.filter = "brightness(1.8)";
+          drawCutout(
+            ctx,
+            assets.monsters,
+            index,
+            e.x + (dx / d) * lunge,
+            e.y + (dy / d) * lunge + bob,
+            index === 0 ? 82 : index === 1 ? 72 : 114,
+            {
+              flip: index === 1 && dx > 0,
+              tilt: e.wind > 0 ? Math.sin(w.time * 12) * 0.025 : 0,
+            },
+          );
+          ctx.restore();
+          const barY = e.y - (index === 2 ? 126 : 94);
+          rect(e.x - 24, barY, 48, 4, "#17232b");
+          rect(e.x - 24, barY, (48 * e.hp) / e.maxHp, 4, "#bc8371");
+          if (distance(e, w.p) < 180 || e.id === w.locked)
+            label(e.x, barY - 8, e.name, "#edc7ad");
+        } else {
+          const n = actor.n,
+            p = actor,
+            complete = done(s, chapter, n.id),
+            locked = requirements(s, chapter, n).length > 0;
+          if (["talk", "side", "choice"].includes(n.kind)) {
+            const speaker = n.lines?.[0]?.speaker || "",
+              who = speaker.includes("沈栖")
+                ? 3
+                : speaker.includes("阿绫")
+                  ? 2
+                  : speaker.includes("沈砚")
+                    ? 0
+                    : 1;
+            ellipse(p.x, p.y + 2, 15, 6, "#0b1a2066");
+            drawCutout(ctx, assets.cast, who, p.x, p.y, 99);
+          } else if (n.kind === "boss")
+            drawCutout(ctx, assets.monsters, 3, p.x, p.y, 152, {
+              alpha: complete ? 0.35 : locked ? 0.65 : 1,
+            });
+          else
+            drawCutout(
+              ctx,
+              assets.props,
+              3,
+              p.x,
+              p.y,
+              n.kind === "dungeon" ? 62 : 40,
+              { alpha: complete ? 0.5 : 1 },
+            );
+          if (distance(p, w.p) < 230 || w.tracked?.name === n.name)
+            label(
+              p.x,
+              p.y -
+                (["talk", "side", "choice"].includes(n.kind)
+                  ? 111
+                  : n.kind === "boss"
+                    ? 164
+                    : 62),
+              `${complete ? "✓ " : locked ? "· " : ""}${n.name}`,
+              complete ? "#a8cbb9" : locked ? "#a9b5b9" : "#eee0bd",
+            );
+        }
+      }
+      for (const projectile of w.projectiles) {
+        const glow = ctx.createRadialGradient(
+          projectile.x,
+          projectile.y,
+          1,
+          projectile.x,
+          projectile.y,
+          20,
+        );
+        glow.addColorStop(0, "#f3e1b9");
+        glow.addColorStop(0.3, "#93d5cfb0");
+        glow.addColorStop(1, "#93d5cf00");
+        ctx.fillStyle = glow;
+        ctx.fillRect(projectile.x - 20, projectile.y - 20, 40, 40);
+        ellipse(projectile.x, projectile.y, 4, 4, "#f9edcb");
+      }
+      for (const particle of w.particles) {
+        ctx.globalAlpha = Math.min(1, particle.life * 3);
+        ellipse(particle.x, particle.y, 2, 2, particle.color);
+        ctx.globalAlpha = 1;
+      }
       if (w.slash > 0) {
-        const a = Math.atan2(w.face.y, w.face.x);
+        const a = Math.atan2(
+          (w.swingFace || w.face).y,
+          (w.swingFace || w.face).x,
+        );
         ctx.strokeStyle = "#ffe4a6";
         ctx.lineWidth = 9;
         ctx.beginPath();
@@ -790,6 +850,19 @@ export default function ActionWorld({
         ctx.stroke();
       }
       if (w.magic > 0) {
+        const glow = ctx.createRadialGradient(
+          w.p.x,
+          w.p.y - 25,
+          5,
+          w.p.x,
+          w.p.y - 25,
+          170 * (1 - w.magic / 0.6) + 10,
+        );
+        glow.addColorStop(0, "#e0d09a16");
+        glow.addColorStop(0.75, "#99d8d02a");
+        glow.addColorStop(1, "#99d8d000");
+        ctx.fillStyle = glow;
+        ctx.fillRect(w.p.x - 180, w.p.y - 205, 360, 360);
         ctx.strokeStyle = `rgba(164,227,204,${w.magic})`;
         ctx.lineWidth = 6;
         ctx.beginPath();
@@ -870,7 +943,8 @@ export default function ActionWorld({
       const mx = width - 138,
         my = 20;
       rect(mx - 8, my - 8, 126, 98, "#122d29dc");
-      rect(mx + 46, my, 7, 80, "#5e9a94");
+      ctx.drawImage(assets.village.image, mx, my, 108, 80);
+      rect(mx, my, 108, 80, "#12212466");
       chapters[chapter].nodes.forEach((n) => {
         const p = nodePoint(n);
         rect(mx + p.x / 14, my + p.y / 12.5, 3, 3, "#c4b27c");
@@ -893,6 +967,7 @@ export default function ActionWorld({
           kills: w.enemies.filter((e) => e.hp <= 0).length,
           message: w.message,
           cooldown: w.cd,
+          target: w.enemies.find((e) => e.id === w.locked && e.hp > 0) || null,
         });
       }
     }
@@ -920,18 +995,41 @@ export default function ActionWorld({
     }
   }, [state.hp, state.mp]);
   useEffect(() => {
-    if (busy || guide) input.current.clear();
+    if (busy || guide) {
+      input.current.clear();
+      analog.current = { x: 0, y: 0 };
+      setStick({ x: 0, y: 0 });
+    }
   }, [busy, guide]);
   const press = (kind) => controls.current?.(kind);
   const progress = wildProgress(state);
+  const setJoystick = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect(),
+      dx = e.clientX - rect.left - rect.width / 2,
+      dy = e.clientY - rect.top - rect.height / 2,
+      d = Math.hypot(dx, dy),
+      radius = 28;
+    const x = d ? dx / Math.max(radius, d) : 0,
+      y = d ? dy / Math.max(radius, d) : 0;
+    analog.current = { x, y };
+    setStick({ x: x * radius, y: y * radius });
+  };
+  const releaseJoystick = () => {
+    stickPointer.current = null;
+    analog.current = { x: 0, y: 0 };
+    setStick({ x: 0, y: 0 });
+  };
   return (
-    <div className="action-world">
+    <div
+      className={`action-world painted-world ${artStatus !== "ready" ? "art-loading" : ""}`}
+    >
       <canvas
         ref={canvas}
+        data-art-ready={artStatus === "ready"}
         aria-label="可探索的青溪山野，WASD移动，J挥刀，K灯术，空格闪避，E交互"
         tabIndex={0}
         onPointerDown={(e) => {
-          if (busy) return;
+          if (busy || artStatus !== "ready") return;
           canvas.current.focus();
           const r = canvas.current.getBoundingClientRect(),
             c = live.current.camera;
@@ -939,10 +1037,47 @@ export default function ActionWorld({
             x: (e.clientX - r.left) / c.scale + c.cx,
             y: (e.clientY - r.top) / c.scale + c.cy,
           };
-          live.current.route = findPath(live.current.p, goal);
-          live.current.target = live.current.route.shift() || null;
+          controls.current?.({ point: goal });
         }}
       />
+      {artStatus !== "ready" && (
+        <div className="painted-loader">
+          <Flame />
+          <b>{artStatus === "error" ? "绘卷未能载入" : "正在展开绘卷"}</b>
+          <span>
+            {artStatus === "error"
+              ? "请检查连接后重试，旅途进度已保留。"
+              : "正在准备人物动作与场景素材…"}
+          </span>
+          {artStatus === "error" && (
+            <button
+              onClick={() => {
+                setArtStatus("loading");
+                loadPaintedAssets()
+                  .then((a) => {
+                    artRef.current = a;
+                    setArtStatus("ready");
+                  })
+                  .catch(() => setArtStatus("error"));
+              }}
+            >
+              重新载入
+            </button>
+          )}
+        </div>
+      )}
+      {hud.target && (
+        <div className="painted-target">
+          <Crosshair size={14} />
+          <b>{hud.target.name}</b>
+          <span>
+            {Math.ceil(hud.target.hp)} / {hud.target.maxHp}
+          </span>
+          <i
+            style={{ width: `${(hud.target.hp / hud.target.maxHp) * 100}%` }}
+          />
+        </div>
+      )}
       <div className="wild-heading">
         <span>山野探索 / {chapters[state.chapter].numeral}</span>
         <h2>{chapters[state.chapter].location}</h2>
@@ -971,7 +1106,7 @@ export default function ActionWorld({
           <i style={{ "--fill": `${(hud.mp / 6) * 100}%` }} />
         </div>
       </div>
-      <div className="wild-message" role="status">
+      <div className="wild-message" role="status" hidden={!!hud.target}>
         {hud.message}
       </div>
       {hud.near && !busy && (
@@ -986,7 +1121,27 @@ export default function ActionWorld({
           </small>
         </button>
       )}
-      <div className="wild-dpad" aria-label="探索方向">
+      <div
+        className="painted-joystick"
+        role="group"
+        aria-label="自由方向摇杆"
+        onPointerDown={(e) => {
+          if (busy) return;
+          stickPointer.current = e.pointerId;
+          e.currentTarget.setPointerCapture(e.pointerId);
+          setJoystick(e);
+        }}
+        onPointerMove={(e) => {
+          if (stickPointer.current === e.pointerId) setJoystick(e);
+        }}
+        onPointerUp={releaseJoystick}
+        onPointerCancel={releaseJoystick}
+        onLostPointerCapture={releaseJoystick}
+      >
+        <i style={{ transform: `translate(${stick.x}px,${stick.y}px)` }} />
+        <span>移动</span>
+      </div>
+      <div className="wild-dpad sr-only" aria-label="探索方向">
         {[
           ["w", "↑", "向上"],
           ["a", "←", "向左"],
@@ -1036,8 +1191,17 @@ export default function ActionWorld({
             onLostPointerCapture={() => input.current.delete("attack")}
             onClick={() => press(id)}
           >
-            <kbd>{key}</kbd>
+            {id === "attack" ? (
+              <Swords />
+            ) : id === "magic" ? (
+              <Flame />
+            ) : id === "dash" ? (
+              <Wind />
+            ) : (
+              <Heart />
+            )}
             <span>{name}</span>
+            <kbd>{key}</kbd>
           </button>
         ))}
       </div>
@@ -1053,6 +1217,9 @@ export default function ActionWorld({
           击退 {progress.kills}/5 · 宝箱 {progress.chests}/3
         </small>
         <div>
+          <button disabled={busy} onClick={() => press("hunt")}>
+            锁定近敌
+          </button>
           <button disabled={busy} onClick={() => press("track")}>
             追踪探索
           </button>
@@ -1089,7 +1256,9 @@ export default function ActionWorld({
           <button onClick={() => setGuide(false)}>开始探索</button>
         </div>
       )}
-      <div className="wild-help">WASD 移动 · 点击地面行走 · 红圈出现时闪避</div>
+      <div className="wild-help">
+        WASD / 摇杆移动 · 点敌接战 · 点物件交互 · 空格闪避
+      </div>
     </div>
   );
 }

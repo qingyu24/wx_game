@@ -432,3 +432,392 @@
     top: 110px;
   }
 }
+/* Painted action-RPG direction: preserve illustration detail and give the world the space. */
+.game-layout.is-roaming {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 1650px;
+}
+.game-layout.is-roaming .quest-sidebar {
+  display: none;
+}
+.painted-world {
+  background: #152629;
+}
+.painted-world canvas {
+  cursor: crosshair;
+}
+.painted-world .wild-heading {
+  top: 20px;
+  left: 22px;
+  text-shadow:
+    0 2px 12px #07151d,
+    0 0 25px #07151d;
+}
+.painted-world .wild-heading > span {
+  font-size: 9px;
+  color: #d2cbb5;
+}
+.painted-world .wild-heading h2 {
+  font-size: 27px;
+  letter-spacing: 7px;
+}
+.painted-world .wild-heading p {
+  font-size: 10px;
+  color: #d2cbb5;
+}
+.painted-world .wild-vitals {
+  top: 126px;
+  left: 22px;
+  width: 174px;
+  padding: 11px 14px;
+  background: linear-gradient(135deg, #122632f0, #1c3430d9);
+  border: 1px solid #c5b28c66;
+  border-radius: 3px 16px 3px 16px;
+  box-shadow: 0 6px 26px #08171e66;
+}
+.painted-world .wild-vitals i {
+  height: 4px;
+}
+.painted-world .wild-objective {
+  top: 186px;
+  right: 20px;
+  background: linear-gradient(135deg, #152a34ed, #233731dc);
+  border-color: #b5a28266;
+  border-radius: 3px 14px 3px 14px;
+  box-shadow: 0 6px 24px #08171e44;
+}
+.painted-world .wild-objective button {
+  background: #293c3dcc !important;
+  border-color: #b8ac8255 !important;
+  color: #e3d5b7;
+  min-height: 30px;
+}
+.painted-world .wild-message {
+  top: auto;
+  bottom: 125px;
+  max-width: 65%;
+  font-size: 12px;
+  background: #10232de0;
+  border: 1px solid #d5c29b33;
+  box-shadow: 0 3px 20px #07161b55;
+  backdrop-filter: blur(5px);
+}
+.painted-world .wild-message:empty {
+  display: none;
+}
+.painted-world .wild-interact {
+  bottom: 178px;
+  background: linear-gradient(120deg, #e5d9b6, #c9b387) !important;
+  border: 1px solid #f1e0af !important;
+  border-radius: 3px 14px 3px 14px;
+  box-shadow: 0 5px 25px #0a172c88;
+  padding: 12px 20px !important;
+}
+.painted-world .wild-guide-toggle {
+  background: #172c35e0 !important;
+  color: #e4d5b3;
+  border-color: #c4b29166 !important;
+}
+.painted-world .wild-actions {
+  bottom: 32px;
+  right: 27px;
+  gap: 12px;
+  align-items: flex-end;
+}
+.painted-world .wild-actions button {
+  width: 70px;
+  height: 70px;
+  min-width: 70px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 35% 25%,
+    #3e4f51,
+    #172b35 70%
+  ) !important;
+  border: 1px solid #c9b79099 !important;
+  box-shadow:
+    inset 0 0 0 4px #152934,
+    inset 0 0 0 5px #c6b58e44,
+    0 7px 18px #07151c88;
+  gap: 3px;
+  position: relative;
+  transition:
+    filter 0.12s,
+    transform 0.12s;
+}
+.painted-world .wild-actions button:first-child {
+  width: 86px;
+  height: 86px;
+  background: radial-gradient(
+    circle at 35% 25%,
+    #8c7755,
+    #3d3c34 75%
+  ) !important;
+  border-color: #e0c895 !important;
+}
+.painted-world .wild-actions svg {
+  width: 24px;
+  height: 24px;
+  stroke-width: 1.5;
+  color: #e8d2a6;
+}
+.painted-world .wild-actions button:first-child svg {
+  width: 30px;
+  height: 30px;
+}
+.painted-world .wild-actions span {
+  font-size: 10px;
+  color: #ece0c9;
+  white-space: nowrap;
+}
+.painted-world .wild-actions kbd {
+  font-size: 8px;
+  opacity: 0.6;
+  line-height: 1;
+}
+.painted-world .wild-actions button:active {
+  transform: scale(0.93);
+  filter: brightness(1.3);
+}
+.painted-world .wild-actions button:disabled {
+  filter: saturate(0.25);
+  opacity: 0.5;
+}
+.painted-world .wild-help {
+  bottom: 10px;
+  left: 23px;
+  color: #e4d8bc;
+  text-shadow: 0 2px 6px #081820;
+  font-size: 10px;
+}
+.painted-joystick {
+  position: absolute;
+  bottom: 38px;
+  left: 30px;
+  width: 104px;
+  height: 104px;
+  border-radius: 50%;
+  border: 1px solid #d5c29655;
+  background: radial-gradient(circle, #20354155, #172a3580);
+  box-shadow:
+    inset 0 0 0 8px #142a3133,
+    inset 0 0 0 9px #c6b58a22,
+    0 5px 20px #08161e66;
+  touch-action: none;
+  user-select: none;
+  display: grid;
+  place-items: center;
+}
+.painted-joystick i {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 25%, #aa9b79, #4b5b57 65%, #203540);
+  border: 1px solid #e3cfa4bb;
+  box-shadow:
+    inset 0 0 0 4px #22363b66,
+    0 3px 12px #05162177;
+  pointer-events: none;
+}
+.painted-joystick > span {
+  position: absolute;
+  bottom: -18px;
+  color: #d3cbb9;
+  font-size: 9px;
+  letter-spacing: 3px;
+  pointer-events: none;
+}
+.painted-world .wild-dpad.sr-only {
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  position: absolute;
+  white-space: nowrap;
+}
+.painted-loader {
+  position: absolute;
+  z-index: 20;
+  inset: 0;
+  background: radial-gradient(ellipse at center, #213c43, #101e2a 75%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  color: #dfcca4;
+}
+.painted-loader svg {
+  width: 30px;
+  height: 30px;
+  animation: painted-breathe 1.8s ease-in-out infinite;
+}
+.painted-loader b {
+  font-family: serif;
+  font-size: 21px;
+  letter-spacing: 6px;
+}
+.painted-loader span {
+  font-size: 12px;
+  color: #aebbbb;
+}
+.painted-loader button {
+  padding: 10px 20px !important;
+  background: #536360 !important;
+  border: 1px solid #c6b48d !important;
+  color: #f0dfbb;
+}
+.painted-target {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 20px;
+  width: 210px;
+  padding: 10px 14px 14px;
+  background: #17282de8;
+  border: 1px solid #af927466;
+  border-radius: 4px;
+  color: #ebd9bc;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 5px 20px #10202866;
+}
+.painted-target > b {
+  font-size: 13px;
+}
+.painted-target > span {
+  margin-left: auto;
+  font-size: 10px;
+  color: #cba78d;
+}
+.painted-target > i {
+  position: absolute;
+  bottom: 5px;
+  left: 0;
+  height: 3px;
+  background: #c28c78;
+  max-width: 100%;
+}
+@keyframes painted-breathe {
+  50% {
+    opacity: 0.35;
+    transform: translateY(-3px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .painted-loader svg {
+    animation: none;
+  }
+}
+@media (max-width: 700px) {
+  .painted-world .wild-heading {
+    left: 14px;
+    top: 18px;
+  }
+  .painted-world .wild-heading h2 {
+    font-size: 25px;
+    letter-spacing: 5px;
+  }
+  .painted-world .wild-vitals {
+    left: 14px;
+    top: 125px;
+    width: 144px;
+    padding: 10px 12px;
+  }
+  .painted-world .wild-objective {
+    top: 186px;
+    right: 12px;
+    width: 166px;
+    padding: 10px;
+  }
+  .painted-world .wild-objective button {
+    min-height: 30px;
+    font-size: 9px;
+    padding: 5px !important;
+  }
+  .painted-world .wild-actions {
+    bottom: 35px;
+    right: 12px;
+    gap: 7px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    max-width: 230px;
+  }
+  .painted-world .wild-actions button {
+    width: 52px;
+    height: 52px;
+    min-width: 52px;
+    box-shadow:
+      inset 0 0 0 3px #152934,
+      inset 0 0 0 4px #c6b58e44,
+      0 4px 12px #07151c88;
+  }
+  .painted-world .wild-actions button:first-child {
+    width: 68px;
+    height: 68px;
+  }
+  .painted-world .wild-actions svg {
+    width: 18px;
+    height: 18px;
+  }
+  .painted-world .wild-actions button:first-child svg {
+    width: 24px;
+    height: 24px;
+  }
+  .painted-world .wild-actions span {
+    font-size: 9px;
+  }
+  .painted-world .wild-actions kbd {
+    display: none;
+  }
+  .painted-joystick {
+    left: 15px;
+    bottom: 39px;
+    width: 94px;
+    height: 94px;
+  }
+  .painted-world .wild-help {
+    font-size: 8px;
+    left: 12px;
+    bottom: 9px;
+    max-width: 95%;
+    letter-spacing: 0;
+  }
+  .painted-world .wild-message {
+    bottom: 146px;
+    max-width: 85%;
+    font-size: 10px;
+    width: max-content;
+    padding: 8px 10px;
+  }
+  .painted-world .wild-interact {
+    bottom: 193px;
+    max-width: 88%;
+    padding: 9px 16px !important;
+    font-size: 12px;
+  }
+  .painted-target {
+    top: 333px;
+    width: 170px;
+    padding: 8px 12px 12px;
+  }
+  .painted-target > b {
+    font-size: 12px;
+  }
+  .painted-loader span {
+    font-size: 11px;
+  }
+}
+@media (max-width: 700px) {
+  .painted-world .wild-interact {
+    bottom: 135px;
+  }
+  .painted-world .wild-message {
+    top: 320px;
+    bottom: auto;
+  }
+  .painted-world .wild-message[hidden] {
+    display: none;
+  }
+}

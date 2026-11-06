@@ -1,8 +1,11 @@
-name: RPG checks
+name: RPG checks and Pages deploy
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
 concurrency:
   group: rpg-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -34,3 +37,27 @@ jobs:
         with:
           name: mist-lantern-web
           path: dist
+      - name: Verify repository subpath hosting
+        run: node tests/browser/subpath.mjs
+      - name: Upload Pages artifact
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Deploy verified build
+        id: deployment
+        uses: actions/deploy-pages@v4

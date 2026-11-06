@@ -1,3 +1,4 @@
+import { chapters } from "../src/rpg/content.mjs";
 import { createPlatformStorage } from "../src/rpg/storage.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -11,12 +12,16 @@ import {
   wildProgress,
   attackProfile,
   enemyProfile,
+  LAYOUT_VERSION,
+  camp,
+  riverCenter,
+  nodePoint,
 } from "../src/rpg/wilds.mjs";
 test("river blocks travel except at bridges, and diagonal sliding respects banks", () => {
   assert.equal(blocked(675, 500), true);
   assert.equal(blocked(675, 720), false);
   assert.equal(blocked(675, 300), false);
-  assert.deepEqual(moveHero({ x: 625, y: 500 }, 15, 10), { x: 625, y: 510 });
+  assert.deepEqual(moveHero({ x: 640, y: 500 }, 15, 10), { x: 640, y: 510 });
 });
 test("melee is directional, lantern is radial, dead enemies cannot be hit again", () => {
   const enemies = [
@@ -55,7 +60,7 @@ test("finite wild rewards survive save round-trip and cannot be farmed", () => {
 test("click routing uses bridges to reach the opposite bank", () => {
   const route = findPath({ x: 530, y: 500 }, { x: 950, y: 500 });
   assert(route.length > 0);
-  assert(route.some((p) => p.y >= 680 || p.y <= 346));
+  assert(route.some((p) => p.y >= 660 || p.y <= 340));
   assert(route.every((p) => !blocked(p.x, p.y)));
   assert.deepEqual(findPath({ x: 530, y: 500 }, { x: 675, y: 500 }), []);
 });
@@ -81,10 +86,21 @@ test("combo finisher and equipment increase melee power; enemy types differ", ()
   assert(enemyProfile(0, 7).maxHp > enemyProfile(0, 0).maxHp);
 });
 test("world checkpoint is validated and survives import/export", () => {
-  const s = { ...freshState(), wildPosition: { chapter: 0, x: 530, y: 700 } };
+  const s = {
+    ...freshState(),
+    wildPosition: { chapter: 0, ...camp, layoutVersion: LAYOUT_VERSION },
+  };
   assert.deepEqual(validateSave(s).wildPosition, s.wildPosition);
   assert.throws(() =>
-    validateSave({ ...s, wildPosition: { chapter: 0, x: 675, y: 500 } }),
+    validateSave({
+      ...s,
+      wildPosition: {
+        chapter: 0,
+        x: 675,
+        y: 500,
+        layoutVersion: LAYOUT_VERSION,
+      },
+    }),
   );
   assert.throws(() =>
     validateSave({ ...s, wildPosition: { chapter: 7, x: 530, y: 700 } }),
@@ -106,4 +122,43 @@ test("same validated save format works through WeChat synchronous storage port",
   assert.equal(storage.getItem("save"), null);
   const web = { getItem: () => null };
   assert.equal(createPlatformStorage({ localStorage: web }), web);
+});
+
+test("painted-map migration preserves inventory and quest rewards from the pixel map", () => {
+  const old = {
+    ...freshState(),
+    wildPosition: { chapter: 0, x: 800, y: 800 },
+    wilds: ["0:enemy0"],
+    coins: 59,
+  };
+  const migrated = validateSave(old);
+  assert.equal(migrated.wildPosition.layoutVersion, LAYOUT_VERSION);
+  assert.deepEqual(migrated.wilds, old.wilds);
+  assert.equal(migrated.coins, 59);
+  assert.deepEqual(
+    { x: migrated.wildPosition.x, y: migrated.wildPosition.y },
+    camp,
+  );
+});
+test("painted houses block movement and every camp, chest and enemy is reachable", () => {
+  assert(blocked(300, 450));
+  assert(!blocked(camp.x, camp.y));
+  assert(riverCenter(800) > riverCenter(300));
+  for (const goal of [
+    { x: 340, y: 790 },
+    { x: 1050, y: 650 },
+    { x: 1100, y: 270 },
+    { x: 900, y: 740 },
+    { x: 1130, y: 540 },
+  ])
+    assert(findPath(camp, goal).length > 0, JSON.stringify(goal));
+});
+
+test("all existing chapter interaction points remain reachable on the painted layout", () => {
+  for (const chapter of chapters)
+    for (const node of chapter.nodes) {
+      const p = nodePoint(node);
+      assert(!blocked(p.x, p.y));
+      assert(findPath(camp, p).length > 0, `${chapter.id}:${node.id}`);
+    }
 });

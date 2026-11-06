@@ -1,4 +1,4 @@
-import { blocked } from "./wilds.mjs";
+import { blocked, camp, LAYOUT_VERSION } from "./wilds.mjs";
 import { chapters, endings, VERSION } from "./content.mjs";
 import { routeDefinition, validateExpedition } from "./expeditions.mjs";
 export const SAVE_KEY = "mist-lantern-save-v1";
@@ -523,12 +523,27 @@ export function validateSave(input) {
       wp.chapter > s.unlocked ||
       !Number.isFinite(wp.x) ||
       !Number.isFinite(wp.y) ||
-      blocked(wp.x, wp.y)
+      wp.x < 45 ||
+      wp.x > 1395 ||
+      wp.y < 90 ||
+      wp.y > 950
     )
       error();
-    s.wildPosition = { chapter: wp.chapter, x: wp.x, y: wp.y };
+    if (wp.layoutVersion === LAYOUT_VERSION) {
+      if (blocked(wp.x, wp.y)) error();
+      s.wildPosition = {
+        chapter: wp.chapter,
+        x: wp.x,
+        y: wp.y,
+        layoutVersion: LAYOUT_VERSION,
+      };
+    } else
+      s.wildPosition = {
+        chapter: wp.chapter,
+        ...camp,
+        layoutVersion: LAYOUT_VERSION,
+      };
   }
-
   s.started = Boolean(input.started);
   const p = input.position;
   s.position =

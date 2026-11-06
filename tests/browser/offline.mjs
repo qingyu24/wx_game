@@ -35,7 +35,7 @@ try {
   await p.goto(`http://127.0.0.1:${server.address().port}/`);
   await ctx.setOffline(true);
   await p.getByRole("button", { name: "点灯启程" }).click();
-  await p.locator(".action-world canvas").waitFor();
+  await p.locator('canvas[data-art-ready="true"]').waitFor({ timeout: 20000 });
   await p.getByRole("button", { name: "剧情地图", exact: true }).click();
   await p
     .getByRole("button", { name: "许婆婆的门灯，交谈", exact: true })

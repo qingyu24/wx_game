@@ -1,28 +1,79 @@
 export const WORLD = { width: 1440, height: 1000 };
-export const camp = { x: 530, y: 700 };
+export const camp = { x: 480, y: 680 };
+export const LAYOUT_VERSION = 2;
 export const caches = [
-  { x: 290, y: 790 },
-  { x: 1120, y: 580 },
-  { x: 1010, y: 300 },
+  { x: 340, y: 790 },
+  { x: 1050, y: 650 },
+  { x: 1100, y: 270 },
 ];
 export const spawns = [
-  { x: 780, y: 770 },
-  { x: 970, y: 680 },
-  { x: 1170, y: 400 },
-  { x: 790, y: 350 },
-  { x: 350, y: 380 },
+  { x: 900, y: 740 },
+  { x: 1110, y: 650 },
+  { x: 1130, y: 540 },
+  { x: 910, y: 290 },
+  { x: 480, y: 380 },
 ];
-export const nodePoint = (n) => {
-  const x = n.x * 13 + 50,
-    y = n.y * 9 + 30;
-  return { x: x > 615 && x < 740 ? 760 : x, y };
+const landmarks = {
+  porch: { x: 320, y: 555 },
+  shed: { x: 570, y: 600 },
+  lamp: { x: 880, y: 715 },
+  well: { x: 270, y: 360 },
+  path: { x: 1040, y: 600 },
+  grave: { x: 1080, y: 340 },
+  letter: { x: 900, y: 395 },
+  dungeon: { x: 830, y: 280 },
+  boss: { x: 1210, y: 430 },
 };
+export const nodePoint = (n) => {
+  const p = landmarks[n.id] || { x: n.x * 13 + 50, y: n.y * 9 + 30 };
+  if (!blocked(p.x, p.y)) return p;
+  for (let radius = 12; radius <= 216; radius += 12)
+    for (let i = 0; i < 24; i++) {
+      const angle = (i * Math.PI) / 12,
+        point = {
+          x: p.x + Math.cos(angle) * radius,
+          y: p.y + Math.sin(angle) * radius,
+        };
+      if (!blocked(point.x, point.y)) return point;
+    }
+  return { ...camp };
+};
+export function riverCenter(y) {
+  const points = [
+    [0, 625],
+    [180, 625],
+    [300, 655],
+    [500, 695],
+    [700, 750],
+    [800, 800],
+    [1000, 905],
+  ];
+  for (let i = 1; i < points.length; i++)
+    if (y <= points[i][0]) {
+      const [ay, ax] = points[i - 1],
+        [by, bx] = points[i];
+      return ax + ((bx - ax) * (y - ay)) / (by - ay);
+    }
+  return 905;
+}
 export function blocked(x, y) {
   if (x < 45 || x > 1395 || y < 90 || y > 950) return true;
-  // River has two walkable bridges.
-  if (x > 630 && x < 726 && !(y > 680 && y < 764) && !(y > 270 && y < 346))
+  const river = Math.abs(x - riverCenter(y)) < 47;
+  if (river && !(y > 275 && y < 340) && !(y > 660 && y < 742)) return true;
+  if (
+    [
+      [180, 390, 375, 510],
+      [290, 170, 485, 290],
+      [950, 90, 1200, 200],
+    ].some(([x0, y0, x1, y1]) => x > x0 && x < x1 && y > y0 && y < y1)
+  )
     return true;
-  return false;
+  return [
+    [820, 450, 62, 43],
+    [160, 690, 85, 50],
+    [1220, 760, 100, 65],
+    [430, 910, 115, 42],
+  ].some(([cx, cy, rx, ry]) => ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 < 1);
 }
 export function moveHero(p, dx, dy) {
   const x = blocked(p.x + dx, p.y) ? p.x : p.x + dx;
@@ -125,8 +176,9 @@ export function attackProfile(combo, gear = 1) {
 export function enemyProfile(index, chapter = 0) {
   const type = index % 3;
   return {
-    name: ["游雾", "疾影", "石魇"][type],
-    maxHp: [100, 82, 140][type] + chapter * 12,
+    type,
+    name: ["食忆蛾", "雾狼", "石魇"][type],
+    maxHp: [100, 82, 260][type] + chapter * 12,
     speed: [65, 95, 42][type],
     windup: [0.8, 0.48, 1.15][type],
     radius: [78, 65, 110][type],

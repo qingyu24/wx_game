@@ -75,8 +75,18 @@ import { createPlatformStorage } from "./rpg/storage.mjs";
 const localStorage = createPlatformStorage();
 import { enterExpedition } from "./rpg/expeditions.mjs";
 import { createExpeditionBattle, bossMechanics } from "./rpg/engine.mjs";
+const chapterArt = [
+  "./art/chapter-0.webp",
+  "./art/chapter-1.webp",
+  "./art/chapter-2.webp",
+  "./art/chapter-3.webp",
+  "./art/chapter-4.webp",
+  "./art/chapter-5.webp",
+  "./art/chapter-6.webp",
+  "./art/chapter-7.webp",
+];
 const artStyle = (ch) => ({
-  "--scene-image": `url("/art/chapter-${ch}.webp")`,
+  "--scene-image": `url("${new URL(chapterArt[ch], document.baseURI).href}")`,
 });
 const kindLabel = {
   talk: "交谈",
@@ -864,7 +874,7 @@ export default function App() {
                     aria-label="沈砚的位置"
                   >
                     <span className="traveler-shadow" />
-                    <img src="/art/traveler.webp" alt="" />
+                    <img src="./art/traveler.webp" alt="" />
                     <i className="lamp-glow" />
                   </div>
                   <div className="scene-bottom">
