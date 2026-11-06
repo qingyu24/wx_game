@@ -821,3 +821,18 @@
     display: none;
   }
 }
+.game-layout.is-roaming .mobile-next-chapter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 18px;
+  border: 1px solid #b7a37c55;
+  background: #172b31;
+  color: #ded2b3;
+  margin-top: 12px;
+}
+.game-layout.is-roaming .mobile-next-chapter > span {
+  font-size: 12px;
+  letter-spacing: 2px;
+}

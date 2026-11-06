@@ -11,6 +11,11 @@ concurrency:
   cancel-in-progress: true
 jobs:
   verify:
+    permissions:
+      contents: read
+      pages: read
+    outputs:
+      pages_enabled: ${{ steps.pages.outputs.enabled }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -39,13 +44,28 @@ jobs:
           path: dist
       - name: Verify repository subpath hosting
         run: node tests/browser/subpath.mjs
+      - name: Inspect Pages configuration
+        id: pages
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              const { data } = await github.rest.repos.getPages(context.repo);
+              const enabled = data.build_type === 'workflow';
+              core.setOutput('enabled', String(enabled));
+              core.notice(enabled ? `Pages configured: ${data.html_url}` : 'Pages exists; select GitHub Actions as the source in Settings > Pages.');
+            } catch (error) {
+              if (![403, 404].includes(error.status)) throw error;
+              core.setOutput('enabled', 'false');
+              core.notice(`Pages configuration unavailable (${error.status}). The tested build is retained as an artifact; enable GitHub Actions in Settings > Pages, then rerun this workflow.`);
+            }
       - name: Upload Pages artifact
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:
           path: dist
   deploy:
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.verify.outputs.pages_enabled == 'true'
     needs: verify
     runs-on: ubuntu-24.04
     timeout-minutes: 10
