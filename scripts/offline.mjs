@@ -8,7 +8,7 @@ const js = files.find((f) => f.endsWith(".js")),
 if (!js || !css) throw Error("Run npm run build before packaging.");
 let code = await readFile(path.join(dist, "assets", js), "utf8");
 let styles = await readFile(path.join(dist, "assets", css), "utf8");
-const art = await readdir(path.join(dist, "art"));
+const art = await readdir(path.join(dist, "art"), { recursive: true });
 for (const file of art.filter((f) => /\.(webp|png)$/.test(f))) {
   const mime = file.endsWith(".webp") ? "image/webp" : "image/png";
   const uri = `data:${mime};base64,${(await readFile(path.join(dist, "art", file))).toString("base64")}`;
@@ -19,7 +19,7 @@ for (const file of art.filter((f) => /\.(webp|png)$/.test(f))) {
   // Dynamic chapter paths share a compact inlined lookup table.
   if (file.startsWith("chapter-") && file.endsWith(".webp")) {
     code = code.replace(
-      /url\("\/art\/chapter-\$\{([a-zA-Z_$][\w$]*)\}\.webp"\)/g,
+      /url\("(?:\.\/|\/)art\/chapter-\$\{([a-zA-Z_$][\w$]*)\}\.webp"\)/g,
       `url("\${__mistArt[$1]}")`,
     );
   }
@@ -31,10 +31,10 @@ for (const file of art.filter((f) => /^chapter-\d\.webp$/.test(f))) {
 }
 // The bundler can rename the parameter, but leaves this literal prefix/suffix intact.
 code = code.replace(
-  /url\("\/art\/chapter-\$\{([^}]+)\}\.webp"\)/g,
+  /url\("(?:\.\/|\/)art\/chapter-\$\{([^}]+)\}\.webp"\)/g,
   'url("${__mistArt[$1]}")',
 );
-const html = `<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#101d24"><title>雾灯归途 · 离线版</title><style>${styles}</style></head><body><div id="root"></div><script type="module">const __mistArt=${JSON.stringify(chapterData)};\n${code.replace(/<\/script/gi, "<\\/script")}</script></body></html>`;
+const html = `<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#101d24"><title>雾灯归途 · 离线版</title><style>${styles}</style></head><body><div id="root"></div><script type="module">${code.includes("__mistArt[") ? `const __mistArt=${JSON.stringify(chapterData)};` : ""}\n${code.replace(/<\/script/gi, "<\\/script")}</script></body></html>`;
 const out = process.argv[2] || "dist/雾灯归途-离线版.html";
 await writeFile(out, html);
 console.log(

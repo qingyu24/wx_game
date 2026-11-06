@@ -24,6 +24,12 @@ try {
 }
 import assert from "node:assert/strict";
 import { freshState } from "../../src/rpg/engine.mjs";
+import {
+  camp,
+  caches,
+  nodePoint,
+  LAYOUT_VERSION,
+} from "../../src/rpg/wilds.mjs";
 import { mkdir } from "node:fs/promises";
 await mkdir("work", { recursive: true });
 const browser = await chromium.launch({
@@ -33,13 +39,66 @@ const browser = await chromium.launch({
   headless: true,
   args: ["--no-sandbox"],
 });
-const page = await browser.newPage({ viewport: { width: 1440, height: 960 } });
+
 const errors = [];
+async function ready(page) {
+  await page
+    .locator('canvas[data-art-ready="true"]')
+    .waitFor({ timeout: 20000 });
+}
+async function saved(page) {
+  return page.evaluate(() =>
+    JSON.parse(localStorage.getItem("mist-lantern-save-v1")),
+  );
+}
+async function waitRecord(page, id) {
+  await page.waitForFunction(
+    (id) =>
+      JSON.parse(localStorage.getItem("mist-lantern-save-v1"))?.wilds.includes(
+        id,
+      ),
+    id,
+    { timeout: 20000 },
+  );
+}
+async function campInteract(page) {
+  await page.getByRole("button", { name: "返回营火", exact: true }).click();
+  await page.waitForFunction(
+    () =>
+      /营火/.test(document.querySelector(".wild-interact")?.textContent || ""),
+    null,
+    { timeout: 20000 },
+  );
+  await page.keyboard.press("e");
+}
+async function clickWorld(page, point) {
+  const current = (await saved(page)).wildPosition || {
+    x: camp.x + 42,
+    y: camp.y + 28,
+  };
+  await page.waitForTimeout(600);
+  const box = await page.locator(".action-world canvas").boundingBox();
+  const scale = Math.max(0.65, Math.min(1.1, box.width / 850));
+  const cx = Math.max(
+      0,
+      Math.min(1440 - box.width / scale, current.x - box.width / scale / 2),
+    ),
+    cy = Math.max(
+      0,
+      Math.min(1000 - box.height / scale, current.y - box.height / scale / 2),
+    );
+  await page
+    .locator(".action-world canvas")
+    .click({
+      position: { x: (point.x - cx) * scale, y: (point.y - cy) * scale },
+    });
+}
+const page = await browser.newPage({ viewport: { width: 1440, height: 960 } });
 page.on("pageerror", (e) => errors.push(e.message));
 await page.goto(baseURL);
 await page.getByRole("button", { name: "点灯启程", exact: true }).click();
-await page.locator(".action-world canvas").waitFor();
-await page.waitForTimeout(300);
+await ready(page);
+await page.waitForTimeout(1800);
 await page.screenshot({ path: "work/action-desktop.png" });
 await page.keyboard.press("e");
 await page.waitForTimeout(150);
@@ -50,60 +109,31 @@ assert.match(await page.locator(".spirit").innerText(), /4 \/ 6/);
 await page.keyboard.press("e");
 await page.waitForTimeout(150);
 assert.match(await page.locator(".spirit").innerText(), /6 \/ 6/);
-// Reach the west cache using actual movement, open it, and reload.
-await page.keyboard.down("s");
-await page.waitForTimeout(480);
-await page.keyboard.up("s");
-await page.keyboard.down("a");
-await page.waitForTimeout(1100);
-await page.keyboard.up("a");
-await page.waitForTimeout(150);
-await page.keyboard.press("e");
-await page.waitForTimeout(250);
-let saved = await page.evaluate(() =>
-  JSON.parse(localStorage.getItem("mist-lantern-save-v1")),
-);
-assert(saved.wilds.includes("0:chest0"), "cache should be persisted");
+await clickWorld(page, caches[0]);
+await waitRecord(page, "0:chest0");
+const checkpoint = await saved(page);
+assert.equal(checkpoint.wildPosition.layoutVersion, LAYOUT_VERSION);
 await page.reload();
 await page.getByRole("button", { name: "继续旅途", exact: true }).click();
+await ready(page);
 assert.match(await page.locator(".wild-heading").innerText(), /木箱 1 \/ 3/);
-// Saved coordinates resume near the collected chest; use the actual route button to return.
-assert(saved.wildPosition && saved.wildPosition.chapter === 0);
-await page.getByRole("button", { name: "返回营火", exact: true }).click();
-await page.waitForTimeout(2200);
-await page.keyboard.press("e");
-// Move east over bridge; combat with nearby enemies using melee and lantern.
-await page.keyboard.down("d");
-await page.waitForTimeout(1300);
-await page.keyboard.up("d");
-for (let i = 0; i < 8; i++) {
-  await page.keyboard.press("j");
-  if (i === 1) await page.keyboard.press("k");
-  await page.waitForTimeout(400);
-}
-saved = await page.evaluate(() =>
-  JSON.parse(localStorage.getItem("mist-lantern-save-v1")),
+await campInteract(page);
+await page.getByRole("button", { name: "锁定近敌", exact: true }).click();
+await page.waitForFunction(
+  () =>
+    JSON.parse(localStorage.getItem("mist-lantern-save-v1")).wilds.some((id) =>
+      id.includes("enemy"),
+    ),
+  null,
+  { timeout: 20000 },
 );
-assert(
-  saved.wilds.some((x) => x.includes("enemy")),
-  "combat kill should persist",
-);
-await page.getByRole("button", { name: "剧情地图", exact: true }).click();
-await page
-  .getByRole("button", { name: "许婆婆的门灯，交谈", exact: true })
-  .click();
-await page.getByRole("dialog").waitFor();
+await clickWorld(page, nodePoint({ id: "porch" }));
+await page.getByRole("dialog").waitFor({ timeout: 20000 });
 await page.getByRole("button", { name: "略过对白", exact: true }).click();
-assert(
-  (
-    await page.evaluate(() =>
-      JSON.parse(localStorage.getItem("mist-lantern-save-v1")),
-    )
-  ).completed.includes("0:porch"),
-);
+assert((await saved(page)).completed.includes("0:porch"));
 assert.deepEqual(errors, []);
 console.log(
-  "PASS desktop movement, camp, spell, cache save/reload, real combat, campaign interaction",
+  "PASS painted assets, mouse-to-chest interaction, target combat, mouse-to-NPC interaction and checkpoint reload",
 );
 await page.close();
 const mission = await browser.newPage({
@@ -132,63 +162,45 @@ await mission.addInitScript(
 );
 await mission.goto(baseURL);
 await mission.getByRole("button", { name: "继续旅途", exact: true }).click();
-await mission.keyboard.down("d");
-await mission.waitForTimeout(1250);
-await mission.keyboard.up("d");
+await ready(mission);
+await mission.getByRole("button", { name: "锁定近敌", exact: true }).click();
 await mission.keyboard.down("j");
-await mission.waitForTimeout(2800);
+await waitRecord(mission, "0:enemy0");
 await mission.keyboard.up("j");
 await mission.getByRole("button", { name: "追踪探索", exact: true }).click();
-for (let i = 0; i < 16; i++) {
-  await mission.waitForTimeout(500);
-  const b = mission.locator(".wild-interact");
-  if ((await b.count()) && /旧木箱/.test(await b.innerText())) {
-    await b.click();
-    break;
-  }
-}
-await mission.getByRole("button", { name: "返回营火", exact: true }).click();
-await mission.waitForTimeout(2600);
+await mission.waitForFunction(
+  () =>
+    /旧木箱/.test(document.querySelector(".wild-interact")?.textContent || ""),
+  null,
+  { timeout: 20000 },
+);
 await mission.keyboard.press("e");
-await mission.waitForTimeout(250);
-const complete = await mission.evaluate(() =>
-  JSON.parse(localStorage.getItem("mist-lantern-save-v1")),
-);
-await mission.screenshot({ path: "work/mission-check.png" });
-assert(
-  complete.wilds.includes("0:bounty"),
-  "completed mission should grant its reward at the camp",
-);
-const coins = complete.coins;
+await waitRecord(mission, "0:chest0");
+await campInteract(mission);
+await waitRecord(mission, "0:bounty");
+const complete = await saved(mission);
 await mission.keyboard.press("e");
-await mission.waitForTimeout(100);
-assert.equal(
-  await mission.evaluate(
-    () => JSON.parse(localStorage.getItem("mist-lantern-save-v1")).coins,
-  ),
-  coins,
-);
+await mission.waitForTimeout(150);
+assert.equal((await saved(mission)).coins, complete.coins);
 await mission.getByRole("button", { name: "操作 ?", exact: true }).click();
 await mission.getByRole("button", { name: "开始探索", exact: true }).click();
-const beforeDash = complete.wildPosition;
+const before = (await saved(mission)).wildPosition;
 await mission.keyboard.press(" ");
 await mission.waitForTimeout(1900);
-const checkpoint = await mission.evaluate(
-  () => JSON.parse(localStorage.getItem("mist-lantern-save-v1")).wildPosition,
-);
+const after = (await saved(mission)).wildPosition;
 assert(
-  Math.hypot(checkpoint.x - beforeDash.x, checkpoint.y - beforeDash.y) > 45,
-  "stationary dodge should actually move",
+  Math.hypot(after.x - before.x, after.y - before.y) > 45,
+  "stationary dodge must displace the player",
 );
 await mission.reload();
 await mission.getByRole("button", { name: "继续旅途", exact: true }).click();
+await ready(mission);
 assert.match(await mission.locator(".wild-objective").innerText(), /已完成/);
 assert.deepEqual(errors, []);
 console.log(
-  "PASS hold combo, objective tracking, mission completion, one-time bounty and controls guide",
+  "PASS ranged-enemy combat, hold combo, painted-map mission, one-time bounty and actual dodge movement",
 );
 await mission.close();
-
 const mobile = await browser.newPage({
   viewport: { width: 390, height: 844 },
   isMobile: true,
@@ -197,7 +209,29 @@ const mobile = await browser.newPage({
 mobile.on("pageerror", (e) => errors.push(e.message));
 await mobile.goto(baseURL);
 await mobile.getByRole("button", { name: "点灯启程", exact: true }).click();
-await mobile.waitForTimeout(400);
+await ready(mobile);
+await mobile.waitForTimeout(1800);
+const beforeStick = (await saved(mobile)).wildPosition;
+const stickBox = await mobile
+  .getByRole("group", { name: "自由方向摇杆" })
+  .boundingBox();
+await mobile.mouse.move(
+  stickBox.x + stickBox.width / 2,
+  stickBox.y + stickBox.height / 2,
+);
+await mobile.mouse.down();
+await mobile.mouse.move(
+  stickBox.x + stickBox.width / 2 + 22,
+  stickBox.y + stickBox.height / 2 + 22,
+);
+await mobile.waitForTimeout(350);
+await mobile.mouse.up();
+await mobile.waitForTimeout(1700);
+const afterStick = (await saved(mobile)).wildPosition;
+assert(
+  afterStick.x > beforeStick.x + 15 && afterStick.y > beforeStick.y + 15,
+  "joystick must allow diagonal movement",
+);
 await mobile.screenshot({ path: "work/action-mobile.png", fullPage: true });
 assert.equal(
   await mobile.evaluate(
@@ -207,6 +241,8 @@ assert.equal(
 );
 await mobile.locator(".wild-actions button").first().tap();
 assert.deepEqual(errors, []);
-console.log("PASS mobile layout and touch attack");
+console.log(
+  "PASS touch joystick diagonal movement, mobile attack and no horizontal overflow",
+);
 await browser.close();
 server?.kill();
