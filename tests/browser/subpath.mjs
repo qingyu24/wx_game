@@ -1,3 +1,4 @@
+import { storyMap } from "./ui.mjs";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
@@ -59,7 +60,7 @@ try {
   await page
     .locator('canvas[data-art-ready="true"]')
     .waitFor({ timeout: 20000 });
-  await page.getByRole("button", { name: "剧情地图", exact: true }).click();
+  await storyMap(page);
   const scene = await page
     .locator(".legacy-scene>.scene-art")
     .evaluate(async (el) => {

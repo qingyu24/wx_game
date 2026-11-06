@@ -1,0 +1,17 @@
+{
+  "id": "./",
+  "name": "雾灯归途 · 手绘动作RPG",
+  "short_name": "雾灯归途",
+  "description": "提灯入雾，自由探索与双手战斗的手绘动作RPG。",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "landscape",
+  "theme_color": "#101d24",
+  "background_color": "#101d24",
+  "icons": [
+    {"src":"./icons/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
+    {"src":"./icons/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
+  ]
+}

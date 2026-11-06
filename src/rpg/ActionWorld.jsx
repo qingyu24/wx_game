@@ -1,8 +1,31 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Swords, Flame, Wind, Heart, Crosshair } from "lucide-react";
+import {
+  Swords,
+  Flame,
+  Wind,
+  Heart,
+  Crosshair,
+  Map,
+  Backpack,
+  BookOpen,
+  Pause,
+  Maximize,
+  Minimize,
+  CircleHelp,
+  ChevronDown,
+  RotateCw,
+  X,
+} from "lucide-react";
+import {
+  movementVector,
+  rollDirection,
+  cameraScale,
+  ROLL_COOLDOWN,
+  HEAL_COOLDOWN,
+} from "./mobile.mjs";
 import { loadPaintedAssets, drawCutout, drawPaintedHero } from "./painted.mjs";
 import { chapters } from "./content.mjs";
-import { done, requirements, stats } from "./engine.mjs";
+import { done, requirements, stats, level } from "./engine.mjs";
 import {
   WORLD,
   LAYOUT_VERSION,
@@ -31,10 +54,18 @@ export default function ActionWorld({
   onNode,
   busy,
   reducedMotion,
+  touch = false,
+  portrait = false,
+  onMenu = () => {},
+  onFullscreen = () => {},
+  onCheckpoint,
+  haptics = true,
+  fullscreen = false,
 }) {
   const canvas = useRef(),
     live = useRef(),
     input = useRef(new Set()),
+    attackPointers = useRef(new Set()),
     analog = useRef({ x: 0, y: 0 }),
     stickPointer = useRef(null),
     artRef = useRef(null),
@@ -42,6 +73,8 @@ export default function ActionWorld({
     [stick, setStick] = useState({ x: 0, y: 0 }),
     controls = useRef(),
     [guide, setGuide] = useState(false),
+    [objectives, setObjectives] = useState(false),
+    [rotateDismissed, setRotateDismissed] = useState(false),
     [hud, setHud] = useState({
       hp: state.hp,
       mp: state.mp,
@@ -57,6 +90,9 @@ export default function ActionWorld({
     onNode,
     busy: busy || guide || artStatus !== "ready",
     reducedMotion,
+    touch,
+    haptics,
+    onCheckpoint,
   };
   useEffect(() => {
     let active = true;
@@ -98,12 +134,16 @@ export default function ActionWorld({
       slash: 0,
       magic: 0,
       dash: 0,
+      dashCd: 0,
+      healCd: 0,
+      dashVector: { x: 1, y: 0 },
       inv: 0,
       cd: 0,
       attackCd: 0,
       time: 0,
       combo: 0,
       comboTime: 0,
+      walkPhase: 0,
       savedAt: 0,
       savedPoint: { ...camp },
       effects: [],
@@ -127,9 +167,8 @@ export default function ActionWorld({
       last = 0,
       ui = 0,
       hidden = false;
-    const persist = () =>
-      props.current.onChange((s) => ({
-        ...s,
+    const persist = (urgent = false) => {
+      const vitals = {
         hp: Math.max(1, Math.round(world.hp)),
         mp: world.mp,
         wildPosition: {
@@ -138,11 +177,22 @@ export default function ActionWorld({
           y: world.p.y,
           layoutVersion: LAYOUT_VERSION,
         },
-      }));
+      };
+      if (urgent && props.current.onCheckpoint)
+        props.current.onCheckpoint(vitals);
+      else props.current.onChange((s) => ({ ...s, ...vitals }));
+    };
     const message = (t) => {
       world.message = t;
       world.messageTime = world.time;
     };
+    function feedback(pattern) {
+      if (props.current.touch && props.current.haptics && navigator.vibrate) {
+        try {
+          navigator.vibrate(pattern);
+        } catch {}
+      }
+    }
     function strike(magic, power) {
       const before = world.enemies;
       world.enemies = hitEnemies(before, world.p, world.face, magic, power);
@@ -152,6 +202,7 @@ export default function ActionWorld({
         if (damage > 0) {
           connected = true;
           world.hitstop = magic ? 0.025 : 0.045;
+          feedback(magic ? 12 : 7);
           const d = distance(e, world.p) || 1;
           if (!magic) {
             const pos = moveHero(
@@ -199,7 +250,7 @@ export default function ActionWorld({
     }
     function action(kind) {
       if (props.current.busy || hidden) return;
-      if (kind === "attack" && world.attackCd <= 0) {
+      if (kind === "attack" && world.attackCd <= 0 && world.dash <= 0) {
         const target = world.enemies
           .filter((e) => e.hp > 0 && distance(e, world.p) < 140)
           .sort((a, b) => distance(a, world.p) - distance(b, world.p))[0];
@@ -233,9 +284,17 @@ export default function ActionWorld({
         });
         persist();
       }
-      if (kind === "dash" && world.dash <= 0 && world.inv <= 0) {
+      if (kind === "dash" && world.dashCd <= 0) {
+        world.dashVector = rollDirection(
+          input.current,
+          analog.current,
+          world.face,
+        );
+        world.face = { ...world.dashVector };
         world.dash = 0.18;
-        world.inv = 0.65;
+        world.inv = Math.max(world.inv, 0.28);
+        world.dashCd = ROLL_COOLDOWN;
+        feedback(10);
       }
       if (kind === "interact" && world.near) {
         const n = world.near;
@@ -259,12 +318,18 @@ export default function ActionWorld({
           props.current.onNode(n);
         }
       }
-      if (kind === "heal" && world.hp < stats(props.current.state).maxHp) {
+      if (
+        kind === "heal" &&
+        world.healCd <= 0 &&
+        world.hp < stats(props.current.state).maxHp
+      ) {
         if (props.current.state.herbs <= 0) {
           message("药草用尽，回营火休整");
           return;
         }
         world.hp = Math.min(stats(props.current.state).maxHp, world.hp + 55);
+        world.healCd = HEAL_COOLDOWN;
+        feedback(8);
         props.current.onChange((s) => ({
           ...s,
           herbs: s.herbs - 1,
@@ -274,6 +339,10 @@ export default function ActionWorld({
       }
     }
     controls.current = (kind) => {
+      if (kind === "checkpoint") {
+        persist(true);
+        return;
+      }
       if (props.current.busy || hidden) return;
       const s = props.current.state;
       const hunt = (enemy) => {
@@ -309,13 +378,13 @@ export default function ActionWorld({
         world.locked = null;
         world.queued = feature || null;
         navigate(feature || point);
-      } else if (kind === "hunt")
-        hunt(
-          world.enemies
-            .filter((e) => e.hp > 0)
-            .sort((a, b) => distance(a, world.p) - distance(b, world.p))[0],
-        );
-      else if (kind === "track") {
+      } else if (kind === "hunt") {
+        const alive = world.enemies
+          .filter((e) => e.hp > 0)
+          .sort((a, b) => distance(a, world.p) - distance(b, world.p));
+        const current = alive.findIndex((e) => e.id === world.locked);
+        hunt(alive[(current + 1) % alive.length]);
+      } else if (kind === "track") {
         const chest = caches
           .map((p, i) => ({
             ...p,
@@ -387,13 +456,22 @@ export default function ActionWorld({
       }
     };
     const up = (e) => input.current.delete(e.key.toLowerCase());
-    const blur = () => input.current.clear();
+    const blur = () => {
+      input.current.clear();
+      attackPointers.current.clear();
+      analog.current = { x: 0, y: 0 };
+      stickPointer.current = null;
+      setStick({ x: 0, y: 0 });
+    };
     const visibility = () => {
       hidden = document.hidden;
+      if (hidden) persist(true);
       blur();
     };
     document.addEventListener("keydown", key, true);
     document.addEventListener("keyup", up);
+    const pagehide = () => persist(true);
+    window.addEventListener("pagehide", pagehide);
     window.addEventListener("blur", blur);
     document.addEventListener("visibilitychange", visibility);
     function rect(x, y, w, h, color) {
@@ -429,6 +507,8 @@ export default function ActionWorld({
           "slash",
           "magic",
           "dash",
+          "dashCd",
+          "healCd",
           "inv",
           "cd",
           "attackCd",
@@ -443,17 +523,11 @@ export default function ActionWorld({
         });
         const keys = input.current;
         if (keys.has("j") || keys.has("attack")) action("attack");
-        let dx =
-            (keys.has("d") || keys.has("arrowright") ? 1 : 0) -
-            (keys.has("a") || keys.has("arrowleft") ? 1 : 0),
-          dy =
-            (keys.has("s") || keys.has("arrowdown") ? 1 : 0) -
-            (keys.has("w") || keys.has("arrowup") ? 1 : 0);
-        if (Math.hypot(analog.current.x, analog.current.y) > 0.15) {
-          dx = analog.current.x;
-          dy = analog.current.y;
-        }
-        const len = Math.hypot(dx, dy);
+        const movement = movementVector(keys, analog.current);
+        let dx = movement.x,
+          dy = movement.y,
+          strength = movement.strength;
+        const len = strength;
         w.repath = Math.max(0, w.repath - dt);
         if (w.locked) {
           const enemy = w.enemies.find((e) => e.id === w.locked && e.hp > 0);
@@ -475,8 +549,7 @@ export default function ActionWorld({
         }
         w.walk = !!len;
         if (len) {
-          dx /= len;
-          dy /= len;
+          // Direction is already normalized; thumb distance controls movement strength.
           w.face = { x: dx, y: dy };
           w.target = null;
           w.route = [];
@@ -489,16 +562,24 @@ export default function ActionWorld({
             dy = (w.target.y - w.p.y) / d;
             w.face = { x: dx, y: dy };
             w.walk = true;
+            strength = 1;
           }
         }
         if (w.dash > 0) {
-          dx = w.face.x;
-          dy = w.face.y;
+          dx = w.dashVector.x;
+          dy = w.dashVector.y;
+          strength = 1;
+          w.face = { ...w.dashVector };
           w.target = null;
           w.route = [];
         }
         const speed = w.dash > 0 ? 630 : 185;
-        w.p = moveHero(w.p, dx * dt * speed, dy * dt * speed);
+        w.p = moveHero(
+          w.p,
+          dx * dt * speed * strength,
+          dy * dt * speed * strength,
+        );
+        w.walkPhase += dt * (w.walk ? strength : 0);
         w.enemies.forEach((e) => {
           e.flash = Math.max(0, e.flash - dt);
           e.stagger = Math.max(0, (e.stagger || 0) - dt);
@@ -643,12 +724,15 @@ export default function ActionWorld({
       ) {
         el.width = Math.round(width * ratio);
         el.height = Math.round(height * ratio);
+        const style = getComputedStyle(el.parentElement);
+        w.safeRight = parseFloat(style.getPropertyValue("--safe-right")) || 0;
+        w.safeTop = parseFloat(style.getPropertyValue("--safe-top")) || 0;
       }
       ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
       rect(0, 0, width, height, "#192f2c");
-      const scale = Math.max(0.65, Math.min(1.1, width / 850));
+      const scale = cameraScale(width, height, props.current.touch);
       const desiredX = Math.max(
           0,
           Math.min(WORLD.width - width / scale, w.p.x - width / scale / 2),
@@ -940,8 +1024,11 @@ export default function ActionWorld({
         rect(0, height - 4, width, 4, "#dc8f73");
       }
       // Mini-map is drawn in screen space.
-      const mx = width - 138,
-        my = 20;
+      const mx = width - 130 - Math.max(0, (w.safeRight || 0) - 12),
+        my =
+          (props.current.touch && height > width ? 116 : 66) +
+          Math.max(0, (w.safeTop || 0) - 12);
+      w.minimap = { x: mx, y: my, width: 108, height: 80 };
       rect(mx - 8, my - 8, 126, 98, "#122d29dc");
       ctx.drawImage(assets.village.image, mx, my, 108, 80);
       rect(mx, my, 108, 80, "#12212466");
@@ -967,6 +1054,9 @@ export default function ActionWorld({
           kills: w.enemies.filter((e) => e.hp <= 0).length,
           message: w.message,
           cooldown: w.cd,
+          dashCooldown: w.dashCd,
+          healCooldown: w.healCd,
+          combo: w.comboTime > 0 ? w.combo : 0,
           target: w.enemies.find((e) => e.id === w.locked && e.hp > 0) || null,
         });
       }
@@ -983,6 +1073,7 @@ export default function ActionWorld({
       input.current.clear();
       document.removeEventListener("keydown", key, true);
       document.removeEventListener("keyup", up);
+      window.removeEventListener("pagehide", pagehide);
       window.removeEventListener("blur", blur);
       document.removeEventListener("visibilitychange", visibility);
     };
@@ -997,10 +1088,19 @@ export default function ActionWorld({
   useEffect(() => {
     if (busy || guide) {
       input.current.clear();
+      attackPointers.current.clear();
+      stickPointer.current = null;
       analog.current = { x: 0, y: 0 };
       setStick({ x: 0, y: 0 });
     }
   }, [busy, guide]);
+  useEffect(() => {
+    input.current.clear();
+    attackPointers.current.clear();
+    analog.current = { x: 0, y: 0 };
+    stickPointer.current = null;
+    setStick({ x: 0, y: 0 });
+  }, [portrait]);
   const press = (kind) => controls.current?.(kind);
   const progress = wildProgress(state);
   const setJoystick = (e) => {
@@ -1014,14 +1114,17 @@ export default function ActionWorld({
     analog.current = { x, y };
     setStick({ x: x * radius, y: y * radius });
   };
-  const releaseJoystick = () => {
+  const releaseJoystick = (e) => {
+    if (e && stickPointer.current !== e.pointerId) return;
     stickPointer.current = null;
     analog.current = { x: 0, y: 0 };
     setStick({ x: 0, y: 0 });
   };
   return (
     <div
-      className={`action-world painted-world ${artStatus !== "ready" ? "art-loading" : ""}`}
+      inert={busy ? true : undefined}
+      aria-hidden={busy ? true : undefined}
+      className={`action-world painted-world mobile-battlefield ${portrait ? "is-portrait" : "is-landscape"} ${artStatus !== "ready" ? "art-loading" : ""}`}
     >
       <canvas
         ref={canvas}
@@ -1033,13 +1136,83 @@ export default function ActionWorld({
           canvas.current.focus();
           const r = canvas.current.getBoundingClientRect(),
             c = live.current.camera;
-          const goal = {
-            x: (e.clientX - r.left) / c.scale + c.cx,
-            y: (e.clientY - r.top) / c.scale + c.cy,
-          };
+          const x = e.clientX - r.left,
+            y = e.clientY - r.top,
+            map = live.current.minimap;
+          const goal =
+            map &&
+            x >= map.x &&
+            x <= map.x + map.width &&
+            y >= map.y &&
+            y <= map.y + map.height
+              ? {
+                  x: ((x - map.x) / map.width) * WORLD.width,
+                  y: ((y - map.y) / map.height) * WORLD.height,
+                }
+              : { x: x / c.scale + c.cx, y: y / c.scale + c.cy };
           controls.current?.({ point: goal });
         }}
       />
+      <nav className="field-menu" aria-label="场内菜单">
+        {[
+          [Map, "舆图", "map"],
+          [Backpack, "行囊", "inventory"],
+          [BookOpen, "旅记", "journal"],
+        ].map(([Icon, label, id]) => (
+          <button
+            key={id}
+            disabled={busy}
+            aria-label={label}
+            onClick={() => {
+              press("checkpoint");
+              setGuide(false);
+              onMenu(id);
+            }}
+          >
+            <Icon />
+          </button>
+        ))}
+        <button
+          aria-label={fullscreen ? "退出全屏" : "进入全屏"}
+          disabled={busy}
+          onClick={onFullscreen}
+        >
+          {fullscreen ? <Minimize /> : <Maximize />}
+        </button>
+        <button
+          aria-label="操作 ?"
+          disabled={busy}
+          onClick={() => setGuide((v) => !v)}
+        >
+          <CircleHelp />
+        </button>
+        <button
+          aria-label="暂停"
+          disabled={busy}
+          onClick={() => {
+            press("checkpoint");
+            setGuide(false);
+            onMenu("pause");
+          }}
+        >
+          <Pause />
+        </button>
+      </nav>
+      {touch && portrait && !rotateDismissed && !busy && (
+        <div className="landscape-tip">
+          <RotateCw />
+          <div>
+            <b>横过手机，双手出发</b>
+            <span>左手移动 · 右手战斗</span>
+          </div>
+          <button
+            aria-label="继续竖屏游玩"
+            onClick={() => setRotateDismissed(true)}
+          >
+            <X />
+          </button>
+        </div>
+      )}
       {artStatus !== "ready" && (
         <div className="painted-loader">
           <Flame />
@@ -1091,9 +1264,18 @@ export default function ActionWorld({
           / 3
         </p>
       </div>
+      <button
+        className="game-avatar portrait"
+        aria-label="角色与行囊"
+        disabled={busy}
+        onClick={() => {
+          press("checkpoint");
+          onMenu("inventory");
+        }}
+      />
       <div className="wild-vitals">
         <b>
-          沈砚 <small>修灯人</small>
+          沈砚 <small>Lv.{level(state)} · 修灯人</small>
         </b>
         <div>
           <span>
@@ -1126,7 +1308,12 @@ export default function ActionWorld({
         role="group"
         aria-label="自由方向摇杆"
         onPointerDown={(e) => {
-          if (busy) return;
+          if (
+            busy ||
+            (stickPointer.current !== null &&
+              stickPointer.current !== e.pointerId)
+          )
+            return;
           stickPointer.current = e.pointerId;
           e.currentTarget.setPointerCapture(e.pointerId);
           setJoystick(e);
@@ -1164,91 +1351,147 @@ export default function ActionWorld({
           </button>
         ))}
       </div>
-      <div className="wild-actions">
+      <div className="wild-actions" aria-label="战斗技能">
+        <button
+          className="target-cycle"
+          aria-label="锁定近敌"
+          disabled={busy}
+          onClick={() => press("hunt")}
+        >
+          <Crosshair />
+          <span>锁敌</span>
+        </button>
         {[
-          ["attack", "J", "挥刀"],
-          [
-            "magic",
-            "K",
-            hud.cooldown > 0 ? `${hud.cooldown.toFixed(1)}s` : "灯术 · 2灵",
-          ],
-          ["dash", "空格", "闪避"],
-          ["heal", "H", `药草 ${state.herbs}`],
-        ].map(([id, key, name]) => (
+          ["attack", "J", "普攻", Swords, 0],
+          ["magic", "K", "灯术", Flame, hud.cooldown || 0],
+          ["dash", "空格", "闪避", Wind, hud.dashCooldown || 0],
+          ["heal", "H", "药草", Heart, hud.healCooldown || 0],
+        ].map(([id, key, label, Icon, cooldown]) => (
           <button
             key={id}
+            className={`combat-skill skill-${id}`}
+            data-action={id}
+            aria-label={label}
+            style={{
+              "--cooldown": `${(cooldown / (id === "magic" ? 3 : id === "dash" ? ROLL_COOLDOWN : HEAL_COOLDOWN)) * 360}deg`,
+            }}
             disabled={
-              busy || (id === "magic" && (hud.mp < 2 || hud.cooldown > 0))
+              busy ||
+              artStatus !== "ready" ||
+              (id === "magic" && (hud.mp < 2 || cooldown > 0)) ||
+              (id === "dash" && cooldown > 0) ||
+              (id === "heal" &&
+                (state.herbs <= 0 ||
+                  cooldown > 0 ||
+                  hud.hp >= stats(state).maxHp))
             }
             onPointerDown={(e) => {
+              e.preventDefault();
+              e.currentTarget.setPointerCapture(e.pointerId);
               if (id === "attack") {
-                e.currentTarget.setPointerCapture(e.pointerId);
+                attackPointers.current.add(e.pointerId);
                 input.current.add("attack");
               }
+              press(id);
             }}
-            onPointerUp={() => input.current.delete("attack")}
-            onPointerCancel={() => input.current.delete("attack")}
-            onLostPointerCapture={() => input.current.delete("attack")}
-            onClick={() => press(id)}
+            onPointerUp={(e) => {
+              if (
+                attackPointers.current.delete(e.pointerId) &&
+                !attackPointers.current.size
+              )
+                input.current.delete("attack");
+            }}
+            onPointerCancel={(e) => {
+              if (
+                attackPointers.current.delete(e.pointerId) &&
+                !attackPointers.current.size
+              )
+                input.current.delete("attack");
+            }}
+            onLostPointerCapture={(e) => {
+              if (
+                attackPointers.current.delete(e.pointerId) &&
+                !attackPointers.current.size
+              )
+                input.current.delete("attack");
+            }}
+            onClick={(e) => {
+              if (e.detail === 0) press(id);
+            }}
           >
-            {id === "attack" ? (
-              <Swords />
-            ) : id === "magic" ? (
-              <Flame />
-            ) : id === "dash" ? (
-              <Wind />
-            ) : (
-              <Heart />
-            )}
-            <span>{name}</span>
+            <Icon />
+            <span>{label}</span>
             <kbd>{key}</kbd>
+            {cooldown > 0 && (
+              <b className="skill-timer">{cooldown.toFixed(1)}</b>
+            )}
+            {id === "heal" && (
+              <small className="skill-count">{state.herbs}</small>
+            )}
+            {id === "attack" && hud.combo > 1 && (
+              <small className="combo-count">{hud.combo}连</small>
+            )}
           </button>
         ))}
       </div>
-      <div className="wild-objective">
-        <span>
-          {progress.claimed
-            ? "✓ 清雾委托已完成"
-            : progress.ready
-              ? "清雾完成 · 回营火领奖"
-              : "清雾委托"}
-        </span>
+      <div className={`wild-objective ${objectives ? "expanded" : ""}`}>
+        <button
+          className="objective-toggle"
+          aria-label="任务"
+          aria-expanded={objectives}
+          onClick={() => setObjectives((v) => !v)}
+        >
+          <span>
+            {progress.claimed
+              ? "✓ 清雾委托已完成"
+              : progress.ready
+                ? "清雾完成 · 回营火领奖"
+                : "清雾委托"}
+          </span>
+          <ChevronDown size={14} />
+        </button>
         <small>
           击退 {progress.kills}/5 · 宝箱 {progress.chests}/3
         </small>
-        <div>
-          <button disabled={busy} onClick={() => press("hunt")}>
-            锁定近敌
-          </button>
-          <button disabled={busy} onClick={() => press("track")}>
+        <div hidden={!objectives}>
+          <button
+            disabled={busy}
+            onClick={() => {
+              press("track");
+              setObjectives(false);
+            }}
+          >
             追踪探索
           </button>
-          <button disabled={busy} onClick={() => press("story")}>
+          <button
+            disabled={busy}
+            onClick={() => {
+              press("story");
+              setObjectives(false);
+            }}
+          >
             主线指引
           </button>
-          <button disabled={busy} onClick={() => press("camp")}>
+          <button
+            disabled={busy}
+            onClick={() => {
+              press("camp");
+              setObjectives(false);
+            }}
+          >
             返回营火
           </button>
         </div>
       </div>
-      <button
-        className="wild-guide-toggle"
-        onClick={() => setGuide((v) => !v)}
-        aria-expanded={guide}
-      >
-        操作 ?
-      </button>
       {guide && (
         <div className="wild-guide">
-          <b>先试试走动和挥刀</b>
+          <b>双手握住这段归途</b>
           <p>
-            WASD
-            或左下方向键移动。点击地面自动寻路，追踪探索会带你去未开启的宝箱。
+            左手摇杆控制方向和速度，右手长按普攻三连击；可以边移动边出招。点地图中的人物和宝箱，会自动走近交互。
           </p>
           <p>
-            长按 J
-            或挥刀按钮连续出招，自动朝向近敌，第三击可打断蓄力；命中回灵。K
-            灯术消耗 2 灵力，空格向朝向闪避。红圈是敌人攻击范围。
+            闪避跟随摇杆方向，留意冷却环；灯术消耗 2
+            灵力，普攻命中回灵。红圈和鳞粉都能通过走位躲开。
           </p>
           <p>
             E 交互，H 恢复生命。清完 5 只雾灵、开启 3 箱，回营火领取委托奖励。
@@ -1257,7 +1500,9 @@ export default function ActionWorld({
         </div>
       )}
       <div className="wild-help">
-        WASD / 摇杆移动 · 点敌接战 · 点物件交互 · 空格闪避
+        {touch
+          ? "左手移动 · 长按普攻 · 摇杆定向闪避"
+          : "WASD 移动 · J 连击 · K 灯术 · 空格闪避"}
       </div>
     </div>
   );

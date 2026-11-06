@@ -1,4 +1,4 @@
-# 雾灯归途 · Mist Lantern
+# 雾灯归途 · 手机动作 RPG
 
 在线游玩：[雾灯归途](https://mist-lantern-qingyu24.yuqingmeng.chatgpt.site)。
 
@@ -27,7 +27,7 @@ npm ci
 npm run dev
 ```
 
-浏览器访问终端显示的地址，默认 `http://localhost:3000`。
+浏览器访问终端显示的地址，默认 `http://localhost:3000`。手机推荐横屏游玩；进入后为完整战斗视口。左手摇杆轻推慢走，右手可持续普攻并同时点击灯术、闪避。
 
 ```sh
 npm test                 # 剧情、地图可解性、战斗与存档逻辑
@@ -75,3 +75,5 @@ npm run build:offline    # 生成可直接双击打开的单文件离线 HTML
 微信小程序迁移、存储适配器和后续云数据库接入边界见 [docs/PLATFORMS.md](docs/PLATFORMS.md)。当前发布仍为本地存档，未连接云数据库。
 
 本轮美术重做目标见 [docs/ART_DIRECTION.md](docs/ART_DIRECTION.md)，生成素材预览在运行后的 `/art-review.html`。
+
+手机 H5 的安装、离线缓存、双手操作和验证说明见 [docs/MOBILE.md](docs/MOBILE.md)。本轮暂停 GitHub 发布，只更新已有手机试玩预览。

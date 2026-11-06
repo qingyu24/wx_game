@@ -1,0 +1,1003 @@
+/* One battle viewport; browser chrome is optional, game chrome stays thumb reachable. */
+.app.is-immersive {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  background: #101d24;
+  isolation: isolate;
+}
+.is-immersive .game-header,
+.is-immersive .game-footer,
+.is-immersive .player-bar,
+.is-immersive .quest-sidebar,
+.is-immersive .world-mode-switch {
+  display: none !important;
+}
+.is-immersive .game-layout,
+.is-immersive .adventure {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  margin: 0;
+  max-width: none;
+  min-width: 0;
+}
+.is-immersive .scene:has(.action-world) {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  border: 0;
+  overflow: hidden;
+}
+.is-immersive .mobile-battlefield {
+  inset: 0;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.mobile-battlefield button {
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.mobile-battlefield button:focus-visible {
+  outline: 2px solid #f2d593;
+  outline-offset: 4px;
+}
+.mobile-battlefield .game-avatar.portrait {
+  position: absolute;
+  left: max(14px, env(safe-area-inset-left));
+  top: max(14px, env(safe-area-inset-top));
+  width: 52px;
+  height: 62px;
+  max-width: none;
+  min-width: 0;
+  border: 1px solid #e2c793a3;
+  border-radius: 4px 14px 4px 14px;
+  background-size: 400% 100%;
+  background-position: 0 0;
+  box-shadow: 0 4px 18px #04151eaa;
+  cursor: pointer;
+}
+.is-immersive .mobile-battlefield .wild-vitals {
+  left: calc(max(14px, env(safe-area-inset-left)) + 62px);
+  top: max(14px, env(safe-area-inset-top));
+  width: 173px;
+  padding: 6px 10px 8px;
+  background: linear-gradient(90deg, #0b202cef, #142a32b0);
+  border: 1px solid #afaa8050;
+  border-radius: 2px 12px 2px 12px;
+  box-shadow: 0 3px 20px #06141b44;
+  pointer-events: none;
+}
+.mobile-battlefield .wild-vitals > b {
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+.mobile-battlefield .wild-vitals > b small {
+  font-size: 8px;
+  margin-left: 9px;
+}
+.mobile-battlefield .wild-vitals > div {
+  margin-top: 4px;
+}
+.mobile-battlefield .wild-vitals span {
+  font-size: 8px;
+  margin-bottom: 3px;
+}
+.mobile-battlefield .wild-vitals i {
+  height: 4px;
+}
+.is-immersive .mobile-battlefield .wild-heading {
+  top: calc(max(14px, env(safe-area-inset-top)) + 75px);
+  left: max(15px, env(safe-area-inset-left));
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  pointer-events: none;
+}
+.mobile-battlefield .wild-heading > span {
+  font-size: 8px;
+  letter-spacing: 2px;
+  order: 2;
+}
+.mobile-battlefield .wild-heading h2 {
+  font-size: 17px;
+  letter-spacing: 4px;
+  margin: 0;
+  order: 1;
+}
+.mobile-battlefield .wild-heading > p {
+  display: none;
+}
+.field-menu {
+  position: absolute;
+  right: max(14px, env(safe-area-inset-right));
+  top: max(12px, env(safe-area-inset-top));
+  display: flex;
+  gap: 6px;
+  z-index: 5;
+}
+.field-menu button {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #c7b38d70;
+  background: linear-gradient(145deg, #314347ee, #122632ef);
+  border-radius: 50%;
+  box-shadow: 0 4px 12px #05182077;
+  color: #e6d4ad;
+}
+.field-menu svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.5;
+}
+.field-menu button:last-child {
+  background: #514e3ae8;
+  border-color: #d4be8a99;
+}
+.field-menu button:disabled {
+  opacity: 0.4;
+}
+.is-immersive .mobile-battlefield .wild-objective {
+  left: max(14px, env(safe-area-inset-left));
+  right: auto;
+  top: calc(max(14px, env(safe-area-inset-top)) + 106px);
+  width: 230px;
+  padding: 9px 11px;
+  background: linear-gradient(110deg, #102833ed, #17322ed4);
+  border: 1px solid #a8a07e55;
+  border-radius: 3px 12px 3px 12px;
+  box-shadow: 0 4px 15px #06171a55;
+  z-index: 4;
+}
+.mobile-battlefield .wild-objective .objective-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  padding: 0 !important;
+  border: 0 !important;
+  background: none !important;
+  min-height: 20px;
+  color: #edddb8;
+  font-size: 11px;
+}
+.objective-toggle > span {
+  font-size: 11px;
+}
+.mobile-battlefield .wild-objective > small {
+  font-size: 9px;
+  margin: 5px 0 0;
+  letter-spacing: 1px;
+}
+.mobile-battlefield .wild-objective > div {
+  margin-top: 9px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+}
+.mobile-battlefield .wild-objective > div[hidden] {
+  display: none;
+}
+.mobile-battlefield .wild-objective > div > button {
+  min-height: 36px;
+  padding: 5px !important;
+  font-size: 9px;
+}
+.wild-objective.expanded .objective-toggle svg {
+  transform: rotate(180deg);
+}
+.is-immersive .mobile-battlefield .painted-target {
+  top: max(14px, env(safe-area-inset-top));
+  left: 50%;
+  width: 196px;
+  padding: 9px 12px 14px;
+  font-size: 11px;
+  z-index: 3;
+}
+.mobile-battlefield .painted-target > span {
+  font-size: 9px;
+}
+.is-immersive .mobile-battlefield .painted-joystick {
+  left: max(24px, env(safe-area-inset-left));
+  bottom: calc(max(21px, env(safe-area-inset-bottom)) + 9px);
+  width: 116px;
+  height: 116px;
+  background: radial-gradient(circle, #283e4a77, #1026318a);
+  border: 1px solid #d6c39960;
+  box-shadow:
+    inset 0 0 0 12px #0d222b22,
+    inset 0 0 0 13px #d1bd8c22,
+    0 6px 24px #06151c66;
+  z-index: 6;
+}
+.mobile-battlefield .painted-joystick > i {
+  width: 48px;
+  height: 48px;
+}
+.mobile-battlefield .painted-joystick > span {
+  bottom: -18px;
+  font-size: 9px;
+  color: #ddd2b9;
+}
+.is-immersive .mobile-battlefield .wild-actions {
+  position: absolute;
+  right: max(14px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  width: 254px;
+  height: 176px;
+  display: block;
+  max-width: none;
+  z-index: 6;
+}
+.mobile-battlefield .wild-actions .combat-skill {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-radius: 50%;
+  min-width: 0;
+  isolation: isolate;
+  overflow: hidden;
+  box-shadow:
+    inset 0 0 0 4px #132a33,
+    inset 0 0 0 5px #c8b58c66,
+    0 5px 15px #06161f99;
+  background: radial-gradient(
+    circle at 30% 22%,
+    #52656a,
+    #18303b 74%
+  ) !important;
+  border: 1px solid #d0bc91a3 !important;
+  padding: 0 !important;
+  color: #f1dfb7;
+}
+.mobile-battlefield .wild-actions .combat-skill::before {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background: conic-gradient(#06151fbd var(--cooldown, 0deg), transparent 0);
+  z-index: -1;
+  pointer-events: none;
+}
+.mobile-battlefield .wild-actions .combat-skill > span {
+  font-size: 10px;
+  letter-spacing: 2px;
+  z-index: 1;
+}
+.mobile-battlefield .wild-actions .combat-skill > kbd {
+  font-size: 8px;
+  line-height: 1;
+  opacity: 0.5;
+  margin: 0;
+}
+.mobile-battlefield .wild-actions .combat-skill > svg {
+  width: 24px;
+  height: 24px;
+  stroke-width: 1.5;
+}
+.mobile-battlefield .wild-actions .skill-attack {
+  right: 14px;
+  bottom: 8px;
+  width: 84px;
+  height: 84px;
+  background: radial-gradient(
+    circle at 30% 20%,
+    #a08a5c,
+    #4e4938 75%
+  ) !important;
+  border-color: #ead39c !important;
+  box-shadow:
+    inset 0 0 0 4px #574e37,
+    inset 0 0 0 5px #d4c08b66,
+    0 7px 22px #081722aa;
+}
+.mobile-battlefield .wild-actions .skill-attack > svg {
+  width: 30px;
+  height: 30px;
+}
+.mobile-battlefield .wild-actions .skill-magic {
+  right: 39px;
+  bottom: 105px;
+  width: 64px;
+  height: 64px;
+  background: radial-gradient(
+    circle at 35% 25%,
+    #527b76,
+    #183c43 75%
+  ) !important;
+}
+.mobile-battlefield .wild-actions .skill-dash {
+  right: 119px;
+  bottom: 0;
+  width: 64px;
+  height: 64px;
+}
+.mobile-battlefield .wild-actions .skill-heal {
+  right: 166px;
+  bottom: 96px;
+  width: 50px;
+  height: 50px;
+  background: radial-gradient(
+    circle at 35% 25%,
+    #677a50,
+    #2a4036 75%
+  ) !important;
+}
+.mobile-battlefield .wild-actions .skill-heal > svg {
+  width: 17px;
+  height: 17px;
+}
+.mobile-battlefield .wild-actions .skill-heal > span {
+  font-size: 8px;
+}
+.mobile-battlefield .wild-actions .target-cycle {
+  position: absolute;
+  right: 202px;
+  bottom: 21px;
+  width: 42px;
+  height: 42px;
+  min-width: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #142e39d9 !important;
+  border: 1px solid #baa78088 !important;
+  padding: 3px !important;
+  box-shadow: 0 3px 10px #07181e66;
+  color: #e4d3ad;
+}
+.target-cycle > svg {
+  width: 17px;
+  height: 17px;
+}
+.target-cycle > span {
+  font-size: 7px;
+  letter-spacing: 1px;
+}
+.mobile-battlefield .wild-actions .skill-timer {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: #14252d9c;
+  border-radius: 50%;
+  font-size: 18px;
+  font-weight: 500;
+  color: #f3e2be;
+  text-shadow: 0 2px 6px #000;
+  z-index: 2;
+}
+.mobile-battlefield .wild-actions .skill-count,
+.mobile-battlefield .wild-actions .combo-count {
+  position: absolute;
+  right: 8px;
+  top: 6px;
+  font-size: 9px;
+  padding: 1px 3px;
+  background: #10262be6;
+  border-radius: 8px;
+  color: #e8d7aa;
+  z-index: 3;
+}
+.mobile-battlefield .wild-actions .combat-skill:disabled {
+  opacity: 0.65;
+  filter: saturate(0.6);
+}
+.mobile-battlefield .wild-actions .combat-skill:active {
+  transform: scale(0.94);
+  filter: brightness(1.25);
+}
+.is-immersive .mobile-battlefield .wild-interact {
+  left: 50%;
+  bottom: 85px;
+  top: auto;
+  max-width: 230px;
+  width: max-content;
+  min-height: 44px;
+  padding: 8px 16px !important;
+  z-index: 5;
+  background: linear-gradient(120deg, #e7d8ad, #b9a176) !important;
+  border-radius: 4px 14px 4px 14px;
+  font-size: 12px;
+}
+.mobile-battlefield .wild-interact small {
+  font-size: 9px;
+  margin-top: 3px;
+}
+.is-immersive .mobile-battlefield .wild-message {
+  left: 50%;
+  top: auto;
+  bottom: 142px;
+  max-width: 48%;
+  width: max-content;
+  font-size: 10px;
+  padding: 7px 11px;
+  background: #112936e0;
+  z-index: 4;
+}
+.is-immersive .mobile-battlefield .wild-message[hidden] {
+  display: none;
+}
+.is-immersive .mobile-battlefield .wild-help {
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: max(10px, env(safe-area-inset-bottom));
+  font-size: 8px;
+  letter-spacing: 1px;
+  max-width: 40%;
+  white-space: nowrap;
+  text-align: center;
+  color: #d6cdb5;
+  opacity: 0.8;
+}
+.landscape-tip {
+  position: absolute;
+  z-index: 8;
+  left: 50%;
+  top: 206px;
+  transform: translateX(-50%);
+  width: calc(100% - 30px);
+  max-width: 330px;
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 13px 10px 13px 16px;
+  background: #112734eb;
+  border: 1px solid #c6b08688;
+  border-radius: 4px 16px 4px 16px;
+  box-shadow: 0 8px 30px #05151e66;
+  color: #e8d5ac;
+}
+.landscape-tip > svg {
+  width: 27px;
+  height: 27px;
+  flex: none;
+  color: #d9bd83;
+}
+.landscape-tip b {
+  font-size: 13px;
+  font-weight: 500;
+}
+.landscape-tip span {
+  display: block;
+  font-size: 10px;
+  color: #aabbba;
+  margin-top: 3px;
+  letter-spacing: 2px;
+}
+.landscape-tip button {
+  width: 40px;
+  height: 40px;
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  color: #d8c9ab;
+}
+.landscape-tip button > svg {
+  width: 17px;
+  height: 17px;
+}
+.mobile-battlefield.is-portrait .field-menu {
+  display: grid;
+  grid-template-columns: repeat(3, 38px);
+  gap: 6px;
+}
+.mobile-battlefield.is-portrait .field-menu button {
+  width: 38px;
+  height: 38px;
+}
+.is-immersive .mobile-battlefield.is-portrait .painted-target {
+  top: 285px;
+  width: 190px;
+}
+.is-immersive .mobile-battlefield.is-portrait .wild-interact {
+  bottom: 192px;
+}
+.is-immersive .mobile-battlefield.is-portrait .wild-message {
+  bottom: 245px;
+  max-width: 85%;
+}
+.is-immersive .mobile-battlefield.is-portrait .wild-help {
+  bottom: 7px;
+  max-width: 95%;
+  font-size: 8px;
+}
+.mobile-battlefield .wild-guide {
+  max-height: calc(100dvh - 30px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  z-index: 12;
+}
+.mobile-battlefield .wild-guide p {
+  font-size: 12px;
+  line-height: 1.7;
+}
+.mobile-battlefield .wild-guide > button {
+  min-height: 44px;
+}
+.is-immersive .modal-shade {
+  z-index: 40;
+  padding: max(10px, env(safe-area-inset-top))
+    max(12px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom))
+    max(12px, env(safe-area-inset-left));
+  overflow: hidden;
+  backdrop-filter: blur(6px);
+}
+.is-immersive .modal {
+  max-height: calc(100dvh - 22px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  margin: 0;
+  width: min(880px, calc(100vw - 28px));
+  border-radius: 5px 20px 5px 20px;
+}
+.is-immersive .modal-header {
+  position: sticky;
+  top: 0;
+  background: #142a32f5;
+  z-index: 3;
+  padding: 15px 20px;
+}
+.is-immersive .modal-header h2 {
+  font-size: 22px;
+}
+.is-immersive .modal-header .eyebrow {
+  font-size: 8px;
+}
+.is-immersive .modal-header .icon-button {
+  min-width: 44px;
+  min-height: 44px;
+}
+.modal.modal-pause {
+  width: min(520px, calc(100vw - 26px));
+}
+.pause-game-content {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.pause-game-location {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  color: #ddc898;
+}
+.pause-game-location span {
+  font-size: 13px;
+  letter-spacing: 2px;
+}
+.pause-game-location p {
+  margin: 4px 0 0;
+  font-size: 10px;
+  color: #9aafaa;
+}
+.pause-game-content .pause-resume {
+  width: 100%;
+  min-height: 46px;
+  justify-content: center;
+}
+.pause-game-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.pause-game-grid .secondary {
+  justify-content: center;
+  min-height: 44px;
+  padding: 9px 7px;
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+.pause-game-grid svg {
+  width: 15px;
+  height: 15px;
+}
+.pause-game-tools {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.pause-game-tools button {
+  min-height: 36px;
+  border-bottom: 1px solid #a7ab8244;
+  color: #c9b98f;
+  font-size: 10px;
+}
+.pause-game-save {
+  font-size: 9px;
+  line-height: 1.7;
+  color: #8ea99d;
+  letter-spacing: 1px;
+}
+.pause-game-content > .text-button {
+  justify-content: center;
+  min-height: 36px;
+  font-size: 11px;
+}
+.is-immersive .mobile-next-chapter {
+  position: absolute;
+  bottom: 135px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 330px;
+  z-index: 10;
+  margin: 0;
+  border-radius: 5px 15px 5px 15px;
+  box-shadow: 0 5px 20px #0c1b2b99;
+}
+.is-immersive .mobile-next-chapter .primary {
+  min-height: 44px;
+  padding: 10px 15px;
+}
+.is-immersive .toast {
+  z-index: 80;
+  bottom: 45%;
+  max-width: 80%;
+  font-size: 12px;
+  pointer-events: none;
+}
+.touch-game .title-screen {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+.touch-game .title-content {
+  position: absolute;
+  left: max(8%, env(safe-area-inset-left));
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 0;
+  width: 80%;
+  max-width: 520px;
+}
+.touch-game .title-logo h1 {
+  font-size: clamp(66px, 13dvh, 108px);
+  line-height: 1.05;
+}
+.touch-game .title-top {
+  padding: max(15px, env(safe-area-inset-top))
+    max(20px, env(safe-area-inset-right)) 0 max(20px, env(safe-area-inset-left));
+}
+.touch-game .title-description {
+  font-size: 12px;
+  margin: 15px 0;
+  line-height: 1.9;
+}
+.touch-game .title-actions {
+  gap: 10px;
+}
+.touch-game .title-actions > .primary {
+  min-height: 48px;
+  padding: 12px 22px;
+}
+.touch-game .title-story {
+  display: none;
+}
+.touch-game .title-footer {
+  position: absolute;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  left: 0;
+  right: 0;
+  padding: 0 22px;
+  border: 0;
+}
+.touch-game .title-footer > span:last-child {
+  display: none;
+}
+.touch-game .english-title {
+  font-size: 8px;
+  letter-spacing: 3px;
+  margin: 12px 0;
+}
+.touch-game .title-eyebrow {
+  font-size: 9px;
+  margin-bottom: 12px;
+}
+.touch-game .last-save {
+  font-size: 9px;
+}
+.touch-game .title-footer > span {
+  font-size: 8px;
+}
+.touch-game .title-footer button {
+  min-height: 36px;
+  font-size: 10px;
+}
+@media (pointer: coarse) {
+  .mobile-battlefield .combat-skill > kbd,
+  .mobile-battlefield .wild-interact > kbd {
+    display: none !important;
+  }
+  .mobile-battlefield .field-menu > button {
+    min-height: 40px;
+  }
+  .is-immersive .dialog-controls > button {
+    min-height: 44px;
+  }
+  .is-immersive .choices button {
+    min-height: 48px;
+  }
+}
+@media (max-height: 560px) {
+  .is-immersive .dialog-box {
+    max-height: 74dvh;
+    overflow: auto;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    width: calc(100% - 36px);
+    padding: 13px 20px;
+    margin: 0 auto 12px;
+  }
+  .is-immersive .dialog-text {
+    font-size: 13px;
+    line-height: 1.8;
+    min-height: 0;
+    margin: 10px 0;
+  }
+  .is-immersive .dialog-controls {
+    margin-top: 8px;
+    position: sticky;
+    bottom: -13px;
+    background: #10232cf5;
+    padding: 5px 0;
+  }
+  .is-immersive .dialog-portrait {
+    height: 58%;
+    width: 20%;
+    bottom: 35%;
+  }
+  .is-immersive .battle-overlay {
+    padding: 12px 20px;
+    overflow: auto;
+  }
+  .is-immersive .battle-top h2 {
+    font-size: 20px;
+    margin: 4px 0;
+  }
+  .is-immersive .battle-top p {
+    display: none;
+  }
+  .is-immersive .battle-top .eyebrow {
+    font-size: 8px;
+  }
+  .is-immersive .enemy-art {
+    height: 65%;
+    top: 2%;
+    width: 35%;
+  }
+  .is-immersive .enemy-intent {
+    font-size: 10px;
+    padding: 6px 9px;
+  }
+  .is-immersive .enemy-intent > span {
+    font-size: 8px;
+  }
+  .is-immersive .battle-console {
+    padding-top: 5px;
+  }
+  .is-immersive .battle-log {
+    height: 28px;
+    font-size: 8px;
+  }
+  .is-immersive .battle-hero {
+    padding: 6px 8px;
+    font-size: 9px;
+  }
+  .is-immersive .battle-actions > button {
+    min-height: 48px;
+    padding: 5px;
+    font-size: 9px;
+  }
+  .is-immersive .battle-actions svg {
+    width: 17px;
+    height: 17px;
+  }
+  .is-immersive .battle-actions small {
+    font-size: 7px;
+  }
+  .modal.modal-pause {
+    width: min(720px, calc(100vw - 28px));
+  }
+  .modal-pause .pause-game-content {
+    display: grid;
+    grid-template-columns: 190px 1fr;
+    gap: 10px;
+    padding: 12px 18px;
+  }
+  .pause-game-location {
+    grid-column: 1;
+    grid-row: 1;
+    gap: 9px;
+  }
+  .pause-game-location svg {
+    height: 31px;
+  }
+  .pause-game-location span {
+    font-size: 11px;
+  }
+  .pause-game-location p {
+    font-size: 9px;
+  }
+  .pause-resume {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .pause-game-grid {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    margin: 0;
+    align-self: stretch;
+    gap: 7px;
+  }
+  .pause-game-grid .secondary {
+    min-height: 42px;
+  }
+  .pause-game-tools {
+    grid-column: 1/-1;
+    gap: 12px;
+  }
+  .pause-game-tools button {
+    min-height: 30px;
+  }
+  .pause-game-save {
+    grid-column: 1;
+    font-size: 8px;
+  }
+  .pause-game-content > .text-button {
+    grid-column: 2;
+    font-size: 10px;
+    min-height: 24px;
+  }
+  .touch-game .title-logo h1 {
+    font-size: 56px;
+  }
+  .touch-game .title-content {
+    left: max(7%, env(safe-area-inset-left));
+    width: 65%;
+  }
+  .touch-game .title-description {
+    font-size: 11px;
+    margin: 10px 0;
+  }
+  .touch-game .title-eyebrow {
+    font-size: 8px;
+    margin-bottom: 6px;
+  }
+  .touch-game .english-title {
+    margin: 6px 0;
+  }
+  .touch-game .title-actions > .primary {
+    min-height: 44px;
+    padding: 10px 20px;
+  }
+  .touch-game .title-footer {
+    bottom: 8px;
+  }
+  .touch-game .seal {
+    font-size: 10px;
+    transform: scale(0.8);
+  }
+  .mobile-battlefield .wild-guide {
+    padding: 16px 20px;
+    width: 400px;
+    max-width: 90vw;
+  }
+  .mobile-battlefield .wild-guide p {
+    font-size: 11px;
+    margin: 9px 0;
+  }
+}
+@media (max-width: 740px) and (orientation: landscape) {
+  .is-immersive .mobile-battlefield .painted-target {
+    top: 88px;
+    width: 180px;
+  }
+  .mobile-battlefield .field-menu {
+    gap: 4px;
+  }
+  .field-menu button {
+    width: 36px;
+    height: 38px;
+  }
+  .is-immersive .mobile-battlefield .wild-vitals {
+    width: 156px;
+  }
+  .is-immersive .mobile-battlefield .wild-objective {
+    width: 211px;
+  }
+  .is-immersive .mobile-battlefield .painted-joystick {
+    width: 103px;
+    height: 103px;
+    left: max(17px, env(safe-area-inset-left));
+    bottom: 27px;
+  }
+  .is-immersive .mobile-battlefield .wild-actions {
+    transform: scale(0.91);
+    transform-origin: bottom right;
+    right: max(8px, env(safe-area-inset-right));
+    bottom: 16px;
+  }
+  .is-immersive .mobile-battlefield .wild-interact {
+    bottom: 65px;
+    max-width: 180px;
+    font-size: 10px;
+  }
+  .is-immersive .mobile-battlefield .wild-help {
+    font-size: 7px;
+    max-width: 42%;
+  }
+}
+.is-immersive .mobile-battlefield .wild-actions .target-cycle {
+  width: 42px;
+  height: 42px;
+  min-width: 0;
+  background: #142e39d9 !important;
+  border-color: #baa78088 !important;
+}
+.is-immersive .mobile-battlefield .wild-actions .target-cycle > svg {
+  width: 17px;
+  height: 17px;
+}
+.is-immersive .mobile-battlefield .wild-actions .target-cycle > span {
+  font-size: 7px;
+}
+@media (pointer: coarse) {
+  .is-immersive .field-menu button {
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+  .mobile-battlefield.is-portrait .field-menu {
+    grid-template-columns: repeat(3, 44px);
+  }
+  .is-immersive .mobile-battlefield.is-portrait .wild-vitals {
+    width: 148px;
+  }
+  .is-immersive .mobile-battlefield .wild-actions .target-cycle {
+    width: 46px;
+    height: 46px;
+  }
+}
+.mobile-update {
+  grid-column: 1/-1;
+  padding: 10px;
+  border: 1px solid #bda878;
+  background: #455549;
+  color: #ecddb5;
+  font-size: 11px;
+}
+.mobile-battlefield {
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-top: env(safe-area-inset-top, 0px);
+}
+.landscape-tip button {
+  width: 44px;
+  height: 44px;
+}
+.is-immersive .mobile-battlefield.is-portrait .wild-interact {
+  left: max(14px, env(safe-area-inset-left));
+  transform: none;
+  max-width: 150px;
+  bottom: 180px;
+  font-size: 11px;
+  white-space: normal;
+  text-align: left;
+}

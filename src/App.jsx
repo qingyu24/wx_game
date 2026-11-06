@@ -71,6 +71,8 @@ import {
 import "./index.css";
 import Expedition from "./rpg/Expedition.jsx";
 import ActionWorld from "./rpg/ActionWorld.jsx";
+import useMobileGame from "./rpg/useMobileGame.jsx";
+import "./rpg/mobile-game.css";
 import { createPlatformStorage } from "./rpg/storage.mjs";
 const localStorage = createPlatformStorage();
 import { enterExpedition } from "./rpg/expeditions.mjs";
@@ -182,11 +184,21 @@ function LanternMark({ size = 42 }) {
 function readSettings() {
   try {
     return {
-      ...{ sound: false, reducedMotion: false, textSize: "normal" },
+      ...{
+        sound: false,
+        reducedMotion: false,
+        textSize: "normal",
+        haptics: true,
+      },
       ...JSON.parse(localStorage.getItem("mist-lantern-settings") || "{}"),
     };
   } catch {
-    return { sound: false, reducedMotion: false, textSize: "normal" };
+    return {
+      sound: false,
+      reducedMotion: false,
+      textSize: "normal",
+      haptics: true,
+    };
   }
 }
 export default function App() {
@@ -208,6 +220,11 @@ export default function App() {
   const [settings, setSettings] = useState(readSettings),
     [pending, setPending] = useState(null),
     [slots, setSlots] = useState([]);
+  const immersive = screen === "game" && worldMode;
+  const mobile = useMobileGame(immersive, () => {
+    if (!modalRef.current && !dialogRef.current && !battleRef.current)
+      setModal("pause");
+  });
   const stateRef = useRef(state),
     battleRef = useRef(battle),
     modalRef = useRef(modal),
@@ -216,6 +233,18 @@ export default function App() {
     fileRef = useRef(),
     focusRef = useRef(),
     audioRef = useRef();
+  function saveMobileCheckpoint(vitals) {
+    const next = { ...stateRef.current, ...vitals };
+    stateRef.current = next;
+    setState(next);
+    if (next.started && battleRef.current?.status !== "active") {
+      try {
+        writeSave(localStorage, next);
+      } catch {
+        notify("本地存档空间不足，请在暂停菜单导出存档。");
+      }
+    }
+  }
   const ch = chapters[state.chapter],
     st = stats(state),
     finished = done(state, ch.id, "boss");
@@ -248,7 +277,7 @@ export default function App() {
   useEffect(() => {
     if (screen !== "game") return;
     const id = setInterval(() => {
-      if (!document.hidden && !(modalRef.current === "settings"))
+      if (!document.hidden && !modalRef.current)
         setState((s) => ({ ...s, seconds: s.seconds + 15 }));
     }, 15000);
     return () => clearInterval(id);
@@ -651,9 +680,12 @@ export default function App() {
     new: "再点一盏灯",
     endings: "天亮以后",
     expedition: "灯下旧路",
+    pause: "旅途暂停",
   };
   return (
-    <div className={`app ${screen === "title" ? "is-title" : ""}`}>
+    <div
+      className={`app ${screen === "title" ? "is-title" : ""} ${immersive ? "is-immersive" : ""} ${mobile.touch ? "touch-game" : ""}`}
+    >
       <input
         ref={fileRef}
         type="file"
@@ -667,7 +699,7 @@ export default function App() {
           <div className="title-shade" />
           <div className="title-top">
             <span>
-              <i /> 探索 · 战斗 · 角色扮演
+              <i /> 横屏探索 · 双手操作 · 动作 RPG
             </span>
             <Action
               className="icon-button"
@@ -704,7 +736,11 @@ export default function App() {
               <Action
                 className="primary"
                 icon={Flame}
-                onClick={state.started ? () => loadState(state) : startNew}
+                onClick={() => {
+                  if (mobile.touch) void mobile.enterFullscreen();
+                  if (state.started) loadState(state);
+                  else startNew();
+                }}
               >
                 {state.started ? "继续旅途" : "点灯启程"}
                 <ArrowRight size={17} />
@@ -795,6 +831,20 @@ export default function App() {
                     onNode={openNode}
                     busy={isBusy || transition || screen !== "game"}
                     reducedMotion={settings.reducedMotion}
+                    touch={mobile.touch}
+                    portrait={mobile.portrait}
+                    onMenu={showModal}
+                    onCheckpoint={saveMobileCheckpoint}
+                    onFullscreen={async () => {
+                      const was = mobile.fullscreen,
+                        entered = await mobile.toggleFullscreen();
+                      if (!was && !entered)
+                        notify(
+                          "当前使用沉浸视图；也可通过浏览器菜单添加到主屏幕游玩。",
+                        );
+                    }}
+                    fullscreen={mobile.fullscreen}
+                    haptics={settings.haptics}
                   />
                 )}
                 <button
@@ -1480,6 +1530,93 @@ export default function App() {
                 <X size={21} />
               </button>
             </header>
+            {modal === "pause" && (
+              <div className="pause-game-content">
+                <div className="pause-game-location">
+                  <LanternMark size={28} />
+                  <div>
+                    <span>
+                      {ch.numeral} · {ch.location}
+                    </span>
+                    <p>
+                      生命 {state.hp}/{st.maxHp} · 铜钱 {state.coins}
+                    </p>
+                  </div>
+                </div>
+                <Action
+                  className="primary pause-resume"
+                  onClick={() => setModal(null)}
+                >
+                  继续游玩
+                </Action>
+                <div className="pause-game-grid">
+                  {topNav.map(([id, Icon, label]) => (
+                    <Action
+                      key={id}
+                      className="secondary"
+                      icon={Icon}
+                      onClick={() => showModal(id)}
+                    >
+                      {label}
+                    </Action>
+                  ))}
+                  <Action
+                    className="secondary"
+                    icon={Compass}
+                    onClick={() => {
+                      setWorldMode(false);
+                      setModal(null);
+                    }}
+                  >
+                    剧情地图
+                  </Action>
+                </div>
+                <div className="pause-game-tools">
+                  <button onClick={() => void mobile.enterFullscreen()}>
+                    进入全屏 / 横屏
+                  </button>
+                  <button
+                    onClick={async () => {
+                      const result = await mobile.install();
+                      if (result === "manual")
+                        notify(
+                          "在浏览器菜单中选择“添加到主屏幕”。iPhone 可使用 Safari 的分享菜单。",
+                        );
+                      else if (result === "accepted")
+                        notify("已提交安装，请在设备上完成。");
+                    }}
+                  >
+                    安装到主屏幕
+                  </button>
+                </div>
+                {mobile.updateReady && (
+                  <button
+                    className="mobile-update"
+                    onClick={mobile.applyUpdate}
+                  >
+                    新版本已就绪，保存进度并重新载入
+                  </button>
+                )}
+                <small className="pause-game-save">
+                  {mobile.offlineReady
+                    ? "本机离线素材已就绪"
+                    : mobile.offlineUnavailable
+                      ? "本地自动存档 · 可导出备份"
+                      : "本地自动存档 · 离线资源准备中"}{" "}
+                  · 切换应用后自动暂停
+                </small>
+                <Action
+                  className="text-button"
+                  icon={Home}
+                  onClick={() => {
+                    setScreen("title");
+                    setModal(null);
+                  }}
+                >
+                  返回标题
+                </Action>
+              </div>
+            )}
             {modal === "expedition" && (
               <Expedition
                 state={state}
@@ -1903,6 +2040,23 @@ export default function App() {
                         ...s,
                         reducedMotion: !s.reducedMotion,
                       }))
+                    }
+                  >
+                    <i />
+                  </button>
+                </div>
+                <div className="setting-row">
+                  <div>
+                    <h3>触感反馈</h3>
+                    <p>支持的手机在命中与闪避时轻振动</p>
+                  </div>
+                  <button
+                    className={`toggle ${settings.haptics ? "on" : ""}`}
+                    role="switch"
+                    aria-checked={settings.haptics}
+                    aria-label="触感反馈"
+                    onClick={() =>
+                      setSettings((s) => ({ ...s, haptics: !s.haptics }))
                     }
                   >
                     <i />

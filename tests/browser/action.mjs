@@ -1,3 +1,4 @@
+import { taskCommand } from "./ui.mjs";
 import { chromium } from "playwright";
 import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
@@ -62,7 +63,7 @@ async function waitRecord(page, id) {
   );
 }
 async function campInteract(page) {
-  await page.getByRole("button", { name: "返回营火", exact: true }).click();
+  await taskCommand(page, "返回营火");
   await page.waitForFunction(
     () =>
       /营火/.test(document.querySelector(".wild-interact")?.textContent || ""),
@@ -87,11 +88,9 @@ async function clickWorld(page, point) {
       0,
       Math.min(1000 - box.height / scale, current.y - box.height / scale / 2),
     );
-  await page
-    .locator(".action-world canvas")
-    .click({
-      position: { x: (point.x - cx) * scale, y: (point.y - cy) * scale },
-    });
+  await page.locator(".action-world canvas").click({
+    position: { x: (point.x - cx) * scale, y: (point.y - cy) * scale },
+  });
 }
 const page = await browser.newPage({ viewport: { width: 1440, height: 960 } });
 page.on("pageerror", (e) => errors.push(e.message));
@@ -116,7 +115,7 @@ assert.equal(checkpoint.wildPosition.layoutVersion, LAYOUT_VERSION);
 await page.reload();
 await page.getByRole("button", { name: "继续旅途", exact: true }).click();
 await ready(page);
-assert.match(await page.locator(".wild-heading").innerText(), /木箱 1 \/ 3/);
+assert.match(await page.locator(".wild-objective").innerText(), /宝箱 1\/3/);
 await campInteract(page);
 await page.getByRole("button", { name: "锁定近敌", exact: true }).click();
 await page.waitForFunction(
@@ -167,7 +166,7 @@ await mission.getByRole("button", { name: "锁定近敌", exact: true }).click()
 await mission.keyboard.down("j");
 await waitRecord(mission, "0:enemy0");
 await mission.keyboard.up("j");
-await mission.getByRole("button", { name: "追踪探索", exact: true }).click();
+await taskCommand(mission, "追踪探索");
 await mission.waitForFunction(
   () =>
     /旧木箱/.test(document.querySelector(".wild-interact")?.textContent || ""),
@@ -239,7 +238,7 @@ assert.equal(
   ),
   false,
 );
-await mobile.locator(".wild-actions button").first().tap();
+await mobile.locator('[data-action="attack"]').tap();
 assert.deepEqual(errors, []);
 console.log(
   "PASS touch joystick diagonal movement, mobile attack and no horizontal overflow",

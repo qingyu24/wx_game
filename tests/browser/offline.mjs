@@ -1,3 +1,4 @@
+import { storyMap } from "./ui.mjs";
 import { createServer } from "node:http";
 import { readFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -36,7 +37,7 @@ try {
   await ctx.setOffline(true);
   await p.getByRole("button", { name: "点灯启程" }).click();
   await p.locator('canvas[data-art-ready="true"]').waitFor({ timeout: 20000 });
-  await p.getByRole("button", { name: "剧情地图", exact: true }).click();
+  await storyMap(p);
   await p
     .getByRole("button", { name: "许婆婆的门灯，交谈", exact: true })
     .click();

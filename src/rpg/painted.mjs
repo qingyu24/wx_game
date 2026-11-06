@@ -92,7 +92,9 @@ export function drawPaintedHero(ctx, assets, world) {
   const direction = directionIndex(
       world.slash > 0 ? world.swingFace || world.face : world.face,
     ),
-    frame = world.walk ? Math.floor(world.time * 9) % 4 : 1;
+    frame = world.walk
+      ? Math.floor((world.walkPhase ?? world.time) * 9) % 4
+      : 1;
   let atlas = assets.walk,
     index = direction * 4 + frame,
     height = 99;
