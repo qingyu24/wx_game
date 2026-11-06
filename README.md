@@ -1,6 +1,8 @@
 # 雾灯归途 · 手机动作 RPG
 
-在线游玩：[雾灯归途](https://mist-lantern-qingyu24.yuqingmeng.chatgpt.site)。
+在线游玩：[手机横屏入口](https://rpg.chenbao.fun/) · [GitHub Pages](https://qingyu24.github.io/wx_game/) · [公共项目目录](https://qingyu24.github.io/web/mist-lantern/)。
+
+推送 main 后由 GitHub Actions 验证并发布 Pages。公共项目目录的发布与 Cloudflare 域名配置记录在 qingyu24/web 的 cloudflare/chenbao-rpg/，域名与目录使用同一份 Pages 内容。
 
 从原来的微信休闲小游戏合集重构的中文单机探索 RPG。提灯人沈砚进入一座逐渐遗忘居民的山城，寻找姐姐沈栖，并决定记忆应该由谁保管。
 
@@ -18,7 +20,7 @@
 
 ## 开始游戏
 
-无需安装的交付版在 [playable/mist-lantern.html](playable/mist-lantern.html)。在 GitHub 文件页选择下载后，用浏览器打开即可。此文件包含全部美术与程序，约 10 MB；源码仍是唯一维护入口，可通过 `npm run build:offline` 重新生成。
+无需安装的交付版在 [playable/mist-lantern.html](playable/mist-lantern.html)。在 GitHub 文件页选择下载后，用浏览器打开即可。此文件包含全部美术与程序，约 15 MB；源码仍是唯一维护入口，可通过 `npm run build:offline` 重新生成。
 
 需要 Node.js 20.19+（推荐 22）。
 

@@ -2,7 +2,7 @@
 
 本轮目标：保留手绘美术，将第一张地图改为横屏手机 H5 动作 RPG。浏览器可以直接玩；支持的平台可以添加到主屏幕，后续再接微信小游戏的画布、设备和存储接口。
 
-按用户最新指示，本轮不向 GitHub 推送，不发布公共网页仓库。源码保留在本地 `codex/mobile-first-arpg` 分支，手机试玩沿用已有 Sites 地址。
+首次手游改造时暂缓了 GitHub 发布。2026-11-06 按用户后续指示，已将手游源码同步到 qingyu24/wx_game 的 main，并通过 GitHub Actions 发布 Pages；构建产物同时加入 qingyu24/web 的 public/mist-lantern/。Cloudflare 手游入口为 https://rpg.chenbao.fun/，沿用同一份 Pages 内容。
 
 ## 操作与界面
 
